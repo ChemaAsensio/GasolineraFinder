@@ -9,6 +9,9 @@
     <strong>{{ s.rotulo }}</strong> —
     {{ s.municipio }} —
     {{ s.distanceKm?.toFixed(2) }} km —
-    {{ filters.fuel }}: {{ s.prices[filters.fuel] }} €
+   <ng-container *ngIf="selectedFuelLabel as fuel">
+  {{ fuel }}: {{ s.precios[fuel] }} €
+</ng-container>
+
   </li>
 </ul>

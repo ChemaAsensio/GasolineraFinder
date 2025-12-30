@@ -1,50 +1,133 @@
-<div class="filters-box">
-  <h3>Filtros</h3>
-
-  <div class="row">
-    <label>
-      Carburante:
-      <select [(ngModel)]="fuel" (change)="emitFilters()">
-        <option value="Gasolina 95 E5">Gasolina 95 E5</option>
-        <option value="Gasolina 98 E5">Gasolina 98 E5</option>
-        <option value="Gasóleo A">Gasóleo A</option>
-      </select>
-    </label>
-
-    <label>
-      Radio (km):
-      <input type="number" min="0" [(ngModel)]="radiusKm" (input)="emitFilters()" />
-    </label>
+<div class="filters-container">
+  <div class="filters-header">
+    <h3>Filtros</h3>
+    <button type="button" class="btn-restablecer" (click)="restablecerFiltros()">
+      ↺ Restablecer
+    </button>
   </div>
 
-  <div class="row">
-    <label>
-      Modo marcas:
-      <select [(ngModel)]="brandMode" (change)="emitFilters()">
-        <option value="all">Todas</option>
-        <option value="whitelist">Solo estas (lista blanca)</option>
-        <option value="blacklist">Excluir estas (lista negra)</option>
-      </select>
-    </label>
+  <!-- Tipo de combustible -->
+  <div class="filter-group">
+    <label class="filter-label">Tipo de combustible:</label>
+    <select 
+      class="form-select" 
+      [(ngModel)]="filters.fuelType"
+      (ngModelChange)="onCombustibleChange($event)">
+      <option *ngFor="let tipo of tiposCombustible" [ngValue]="tipo.value">
+        {{ tipo.label }}
+      </option>
+    </select>
+  </div>
 
-    <label>
-      Marcas (separadas por comas):
-      <input
-        type="text"
-        [(ngModel)]="brandsText"
-        (input)="emitFilters()"
-        placeholder="Ej: REPSOL, BP, CEPSA"
+  <!-- Empresas -->
+  <div class="filter-group empresas-filter-group">
+    <label class="filter-label">Empresas:</label>
+    
+    <!-- Selector de modo: Incluir/Excluir -->
+    <div class="mode-selector">
+      <label for="companyMode">Modo:</label>
+      <select 
+        id="companyMode" 
+        class="form-select mode-select"
+        [(ngModel)]="filters.companyMode"
+        (ngModelChange)="onCompanyModeChange($event)">
+        <option value="include">Incluir seleccionadas</option>
+        <option value="exclude">Excluir seleccionadas</option>
+      </select>
+      <span class="help-text">
+        {{ filters.companyMode === 'include' 
+           ? 'Si no selecciona ninguna, se muestran todas. Si selecciona, solo se muestran las seleccionadas.' 
+           : 'Si no selecciona ninguna, se muestran todas. Si selecciona, se excluyen las seleccionadas.' }}
+      </span>
+    </div>
+
+    <!-- Lista de empresas principales (solo las 10) -->
+    <div class="empresas-list">
+      <div *ngFor="let empresa of empresasPrincipales" class="empresa-checkbox">
+        <input 
+          type="checkbox" 
+          [id]="'empresa-' + empresa"
+          [checked]="isEmpresaSeleccionada(empresa)"
+          (change)="toggleCompany(empresa, $event)"
+        />
+        <label [for]="'empresa-' + empresa">{{ empresa }}</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distancia máxima -->
+  <div class="filter-group">
+    <div class="slider-header">
+      <label class="filter-label">
+        Distancia máxima: <strong class="valor-display">{{ distanciaDisplay }}</strong>
+      </label>
+    </div>
+    <div class="slider-container">
+      <input 
+        type="range" 
+        class="form-range" 
+        min="1" 
+        max="100" 
+        step="1"
+        [ngModel]="filters.maxDistance"
+        (ngModelChange)="onDistanciaChange($event)"
+        #distanciaSlider
       />
-    </label>
+      <div class="slider-labels">
+        <span>1 km</span>
+        <span>100 km</span>
+      </div>
+    </div>
   </div>
 
-  <div class="row">
-    <label>
-      Ordenar por:
-      <select [(ngModel)]="sortBy" (change)="emitFilters()">
-        <option value="distance">Distancia</option>
-        <option value="price">Precio</option>
-      </select>
-    </label>
+  <!-- Precio máximo -->
+  <div class="filter-group">
+    <div class="slider-header">
+      <label class="filter-label">
+        Precio máximo: <strong class="valor-display">{{ precioDisplay }}</strong>
+      </label>
+    </div>
+    <div class="slider-container">
+      <input 
+        type="range" 
+        class="form-range" 
+        min="0" 
+        max="3" 
+        step="0.010"
+        [ngModel]="filters.maxPrice"
+        (ngModelChange)="onPrecioChange($event)"
+        #precioSlider
+      />
+      <div class="slider-labels">
+        <span>0 € (Sin límite)</span>
+        <span>3 €/L</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Solo abiertas -->
+  <div class="filter-group">
+    <div class="checkbox-container">
+      <input 
+        type="checkbox" 
+        id="only-open" 
+        [checked]="filters.onlyOpen"
+        (change)="onOnlyOpenChange($event)"
+      />
+      <label for="only-open">Solo gasolineras abiertas</label>
+    </div>
+  </div>
+
+  <!-- Ordenar por -->
+  <div class="filter-group">
+    <label class="filter-label">Ordenar por:</label>
+    <select 
+      class="form-select" 
+      [(ngModel)]="filters.sortBy"
+      (ngModelChange)="onOrdenChange($event)">
+      <option *ngFor="let orden of opcionesOrden" [ngValue]="orden.value">
+        {{ orden.label }}
+      </option>
+    </select>
   </div>
 </div>

@@ -1,18 +1,18 @@
-// summary-box.spec.ts
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { SummaryBoxComponent } from './summary-box';  // ← Importa SummaryBox
 
-describe('SummaryBox', () => {
-  let component: SummaryBoxComponent;
-  let fixture: ComponentFixture<SummaryBoxComponent>;
+import { Contact } from './contact';
+
+describe('Contact', () => {
+  let component: Contact;
+  let fixture: ComponentFixture<Contact>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SummaryBoxComponent]
+      imports: [Contact]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(SummaryBoxComponent);
+    fixture = TestBed.createComponent(Contact);
     component = fixture.componentInstance;
     await fixture.whenStable();
   });

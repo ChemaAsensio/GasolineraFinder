@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Location } from '../../models/location';
+import { Ubicacion } from '../../models/location';
 import { GeolocationService } from '../../services/geolocation';
 
 @Component({
@@ -12,7 +12,7 @@ import { GeolocationService } from '../../services/geolocation';
   styleUrl: './location-selector.scss',
 })
 export class LocationSelectorComponent {
-  @Output() locationChange = new EventEmitter<Location>();
+  @Output() locationChange = new EventEmitter<Ubicacion>();
 
   latText = '';
   lonText = '';
@@ -25,19 +25,25 @@ export class LocationSelectorComponent {
   emitManualLocation() {
     this.errorMsg = null;
 
-    const lat = Number(this.latText.replace(',', '.'));
-    const lon = Number(this.lonText.replace(',', '.'));
+    const latitud = Number(this.latText.replace(',', '.'));
+    const longitud = Number(this.lonText.replace(',', '.'));
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (!Number.isFinite(latitud) || !Number.isFinite(longitud)) {
       this.errorMsg = 'Latitud/longitud inválidas.';
       return;
     }
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    if (latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
       this.errorMsg = 'Latitud o longitud fuera de rango.';
       return;
     }
 
-    this.locationChange.emit({ lat, lon });
+    const ubicacion: Ubicacion = {
+      latitud,
+      longitud,
+      ciudad: 'Ubicación manual',
+    };
+
+    this.locationChange.emit(ubicacion);
   }
 
   async useMyLocation() {
@@ -46,8 +52,8 @@ export class LocationSelectorComponent {
 
     try {
       const loc = await this.geo.getCurrentLocation();
-      this.latText = String(loc.lat);
-      this.lonText = String(loc.lon);
+      this.latText = String(loc.latitud);
+      this.lonText = String(loc.longitud);
       this.locationChange.emit(loc);
     } catch (e: any) {
       this.errorMsg = e?.message ?? 'Error obteniendo ubicación.';

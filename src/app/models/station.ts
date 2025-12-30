@@ -1,3 +1,5 @@
+// src/app/models/station.ts
+
 export interface StationPrices {
   [fuelName: string]: number | null;
 }
@@ -9,26 +11,41 @@ export interface Gasolinera {
   municipio: string;
   provincia: string;
   codigoPostal: string;
-  latitud: number;           // Usa solo lat (no latitud y lat)
-  longitud: number;          // Usa solo lon (no longitud y lon)
+  latitud: number;
+  longitud: number;
   localidad: string;
   margen: string;
   tipoVenta: string;
   horario: string;
-  precios: StationPrices; // Objeto de precios
+  valoracion?: number; // opcional
+
+  // precios unificados (los usa el SummaryBox)
+  precios: StationPrices;
+
   remision: string;
   bioEtanol: string;
   esterMetilico: string;
   porcentajeBioEtanol: string;
   porcentajeEsterMetilico: string;
-  
-  // Propiedades calculadas
+
+  // calculadas
   distanceKm?: number;
-  
-  // Propiedades individuales de precios (mantén si las necesitas)
+
+  // (si las usas en UI o cálculos)
   precioGasolina95: number;
   precioGasolina98: number;
   precioDiesel: number;
   precioDieselPremium: number;
   precioGLP: number;
 }
+export interface Ubicacion {
+  calle: string;  // Nueva propiedad
+  numero: string;  // Nueva propiedad
+  ciudad: string;
+  provincia: string;  // Nueva propiedad
+  latitud: number;
+  longitud: number;
+  direccionCompleta?: string;  // Opcional para almacenar la dirección completa
+}
+// Alias por compatibilidad si alguien importaba Station
+export type Station = Gasolinera;

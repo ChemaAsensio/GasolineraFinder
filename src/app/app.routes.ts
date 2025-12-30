@@ -1,13 +1,11 @@
 import { Routes } from '@angular/router';
+import { Home } from './pages/home/home';
+import { About } from './pages/about/about';
+import { Contact } from './pages/contact/contact';
 
 export const routes: Routes = [
-  { 
-    path: '', 
-    loadComponent: () => import('./pages/home/home').then(m => m.Home)
-  },
-  { 
-    path: 'about', 
-    loadComponent: () => import('./pages/about/about').then(m => m.About)
-  },
-  { path: '**', redirectTo: '' }
+  { path: '', component: Home },
+  { path: 'about', component: About },
+  { path: 'contact', component: Contact },
+  { path: '**', redirectTo: '' }  // Redirige cualquier ruta no válida al inicio
 ];
