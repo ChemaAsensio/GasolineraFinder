@@ -1,7 +1,6 @@
 import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
 import { Ubicacion } from '../../models/location';
 import { GeolocationService } from '../../services/geolocation';
 
@@ -38,11 +37,17 @@ export class LocationSelector {
       return;
     }
 
-    this.locationChange.emit({
+    const ubicacion: Ubicacion = {
       latitud: lat,
       longitud: lon,
       ciudad: 'Ubicación manual',
-    });
+      calle: '',
+      numero: '',
+      provincia: '',
+      direccionCompleta: ''
+    };
+
+    this.locationChange.emit(ubicacion);
   }
 
   async useMyLocation(): Promise<void> {

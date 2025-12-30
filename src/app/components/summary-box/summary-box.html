@@ -1,33 +1,113 @@
-<div class="summary">
-  <h3>Resumen</h3>
-
-  <p *ngIf="stations.length === 0">
-    Selecciona ubicación para ver el resumen.
-  </p>
-
-  <div *ngIf="stations.length > 0">
-    <div class="item" *ngIf="nearest">
-      <strong>Más cercana:</strong>
-      {{ nearest.rotulo }} — {{ nearest.municipio }} —
-      {{ nearest.distanceKm?.toFixed(2) }} km —
-      <ng-container *ngIf="selectedFuelLabel as fuel; else noFuelSelected">
-        {{ fuel }}: {{ nearest.precios?.[fuel] }} €
-      </ng-container>
-      <ng-template #noFuelSelected>
-        (selecciona un combustible)
-      </ng-template>
+<div class="summary-box">
+  <!-- 📅 INFORMACIÓN TEMPORAL -->
+  <div class="summary-section">
+    <h3 class="section-title">📅 INFORMACIÓN TEMPORAL</h3>
+    <div class="info-row">
+      <span class="info-label">🕐 Hora actual:</span>
+      <span class="info-value">{{ horaActual }}</span>
     </div>
+    <div class="info-row">
+      <span class="info-label">🔄 Actualizado hace:</span>
+      <span class="info-value">{{ actualizadoHace }}</span>
+    </div>
+  </div>
 
-    <div class="item" *ngIf="cheapestInRadius">
-      <strong>Más barata (en el radio):</strong>
-      {{ cheapestInRadius.rotulo }} — {{ cheapestInRadius.municipio }} —
-      {{ cheapestInRadius.distanceKm?.toFixed(2) }} km —
-      <ng-container *ngIf="selectedFuelLabel as fuel; else noFuelSelected2">
-        {{ fuel }}: {{ cheapestInRadius.precios?.[fuel] }} €
-      </ng-container>
-      <ng-template #noFuelSelected2>
-        (selecciona un combustible)
-      </ng-template>
+  <!-- 📍 INFORMACIÓN GEOGRÁFICA -->
+  <div class="summary-section">
+    <h3 class="section-title">📍 INFORMACIÓN GEOGRÁFICA</h3>
+    <div class="info-row">
+      <span class="info-label">📍 Ubicación consultada:</span>
+      <span class="info-value">{{ stations[0]?.provincia || 'Desconocida' }}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">📏 Radio de búsqueda:</span>
+      <select [(ngModel)]="radioSeleccionado" (change)="onRadioChange()" class="custom-select">
+        <option [value]="5">5 km</option>
+        <option [value]="10">10 km</option>
+        <option [value]="20">20 km</option>
+        <option [value]="50">50 km</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ⚙️ CONFIGURACIÓN -->
+  <div class="summary-section">
+    <h3 class="section-title">⚙️ CONFIGURACIÓN</h3>
+    
+    <div class="config-row">
+      <div class="config-group">
+        <span class="info-label">🔽 Ordenar por:</span>
+        <select [(ngModel)]="ordenSeleccionado" (change)="onOrdenChange()" class="custom-select">
+          <option value="distance">Distancia (más cercana primero)</option>
+          <option value="price">Precio (más barata primero)</option>
+        </select>
+      </div>
+      
+      <div class="config-group">
+        <span class="info-label">⛽ Tipo de combustible:</span>
+        <select [(ngModel)]="combustibleSeleccionado" (change)="onCombustibleChange()" class="custom-select">
+          <option *ngFor="let tipo of tiposCombustible" [value]="tipo.value">
+            {{ tipo.label }}
+          </option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⛽ TOP 10 GASOLINERAS -->
+  <div class="summary-section">
+    <h3 class="section-title">⛽ GASOLINERAS (Top 10)</h3>
+    
+    <div *ngIf="topGasolineras.length > 0; else noResults" class="gasolineras-table-container">
+      <table class="gasolineras-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Gasolinera</th>
+            <th>Precio</th>
+            <th>Distancia</th>
+            <th>Dirección</th>
+            <th>Horario</th>
+            <th>Valoración</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let gasolinera of topGasolineras; let i = index" 
+              [class.destacada]="i === 0">
+            <td class="col-posicion">{{ i + 1 }}</td>
+            <td class="col-gasolinera">
+              <strong>{{ gasolinera.rotulo }}</strong><br>
+              <small>{{ obtenerEmpresa(gasolinera) }}</small>
+            </td>
+            <td class="col-precio">
+              <strong>€{{ obtenerPrecioGasolinera(gasolinera, combustibleSeleccionado).toFixed(3) }}</strong><br>
+              <small>/L</small>
+            </td>
+            <td class="col-distancia">
+              {{ obtenerDistanciaSimulada(i).toFixed(1) }} km
+            </td>
+            <td class="col-direccion">
+              {{ gasolinera.direccion || 'Dirección no disponible' }}
+            </td>
+            <td class="col-horario">
+              {{ obtenerHorarioFormateado(gasolinera.horario) }}
+            </td>
+            <td class="col-valoracion">
+              {{ obtenerValoracionEstrellas() }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <ng-template #noResults>
+      <div class="no-results">
+        <p>No se encontraron gasolineras con los filtros aplicados.</p>
+      </div>
+    </ng-template>
+    
+    <div class="results-info">
+      <p>Mostrando {{ topGasolineras.length }} de {{ stations.length }} gasolineras encontradas</p>
     </div>
   </div>
 </div>

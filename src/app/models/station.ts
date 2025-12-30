@@ -17,6 +17,7 @@ export interface Gasolinera {
   margen: string;
   tipoVenta: string;
   horario: string;
+  valoracion?: number; // opcional
 
   // precios unificados (los usa el SummaryBox)
   precios: StationPrices;
@@ -37,6 +38,14 @@ export interface Gasolinera {
   precioDieselPremium: number;
   precioGLP: number;
 }
-
+export interface Ubicacion {
+  calle: string;  // Nueva propiedad
+  numero: string;  // Nueva propiedad
+  ciudad: string;
+  provincia: string;  // Nueva propiedad
+  latitud: number;
+  longitud: number;
+  direccionCompleta?: string;  // Opcional para almacenar la dirección completa
+}
 // Alias por compatibilidad si alguien importaba Station
 export type Station = Gasolinera;

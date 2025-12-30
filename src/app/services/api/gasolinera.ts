@@ -1,24 +1,28 @@
+// src/app/services/api/gasolinera.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, map, tap, catchError, of } from 'rxjs';
-import { Gasolinera } from '../../models/station';  
-import { Filtros } from '../../models/filter';      
-import { Ubicacion } from '../../models/location';  
+import { Observable, map, catchError, of, tap } from 'rxjs';
+import { Gasolinera } from '../../models/station';
+import { Filters, FuelType } from '../../models/filter';
+import { Ubicacion } from '../../models/location';
+import { CompanyNormalizerService } from '../company-normalizer'; // ← Añade esta importación
 
 @Injectable({
   providedIn: 'root'
 })
-export class GasolineraService {  
+export class GasolineraService {
   private apiUrl = 'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes';
 
-  // Encabezados para obtener JSON
   private httpHeaders = new HttpHeaders({
     'Accept': 'application/json',
     'Content-Type': 'application/json',
     'User-Agent': 'GasolineraFinder/1.0'
   });
 
-  constructor(private http: HttpClient) { }
+  constructor(
+    private http: HttpClient,
+    private companyNormalizer: CompanyNormalizerService // ← Añade esto al constructor
+  ) { }
 
   // Obtener todas las gasolineras
   getGasolineras(): Observable<Gasolinera[]> {
@@ -30,224 +34,89 @@ export class GasolineraService {
       tap(response => {
         console.log('📦 Respuesta API recibida');
         console.log('🔢 Número de gasolineras:', response?.ListaEESSPrecio?.length || 0);
-        
-        if (response?.ListaEESSPrecio?.length > 0) {
-          const primera = response.ListaEESSPrecio[0];
-          console.log('📋 Ejemplo de datos crudos:', {
-            rotulo: primera.Rótulo,
-            direccion: primera.Dirección,
-            precio95: primera['Precio Gasolina 95 E5']
-          });
-        }
       }),
       map(response => this.transformarDatosAPI(response)),
       catchError(error => {
         console.error('❌ Error en petición HTTP:', error);
-        console.log('💡 Probando con fetch directo...');
-        
-        // Fallback con fetch
         return this.getGasolinerasConFetch();
       })
     );
   }
 
-  // Método fallback usando fetch
   private getGasolinerasConFetch(): Observable<Gasolinera[]> {
     return new Observable(observer => {
       console.log('🔧 Usando fetch como fallback...');
       
       fetch('https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/')
-        .then(response => {
-          console.log('🔧 Fetch status:', response.status, response.statusText);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          
-          return response.text();
-        })
+        .then(response => response.text())
         .then(text => {
-          console.log('🔧 Fetch response recibida, longitud:', text.length);
-          
-          // Limpiar texto si hay BOM o caracteres extraños
           const cleanedText = text.replace(/^\uFEFF/, '');
-          
           try {
             const data = JSON.parse(cleanedText);
-            console.log('🔧 Parseo JSON exitoso');
             const gasolineras = this.transformarDatosAPI(data);
             observer.next(gasolineras);
             observer.complete();
           } catch (e) {
-            console.error('❌ Error parseando JSON:', e);
-            console.log('🔧 Primeros 500 caracteres del texto:', cleanedText.substring(0, 500));
-            
-            // Intentar ver si es XML
-            if (cleanedText.includes('<?xml') || cleanedText.includes('<ListaEESSPrecio>')) {
-              console.log('⚠️ La API devolvió XML en lugar de JSON');
-            }
-            
             observer.next([]);
             observer.complete();
           }
         })
         .catch(error => {
-          console.error('❌ Error en fetch:', error);
           observer.next([]);
           observer.complete();
         });
     });
   }
 
-  // Obtener gasolineras por provincia
-  getGasolinerasPorProvincia(provincia: string): Observable<Gasolinera[]> {
-    console.log('🌐 Llamando a API por provincia:', provincia);
-    
-    return this.http.get<any>(`${this.apiUrl}/EstacionesTerrestres/FiltroProvincia/${provincia}`, {
-      headers: this.httpHeaders
-    }).pipe(
-      tap(response => console.log('📦 Respuesta provincia:', response?.ListaEESSPrecio?.length || 0)),
-      map(response => this.transformarDatosAPI(response)),
-      catchError(error => {
-        console.error('❌ Error provincia:', error);
-        return of([]);
-      })
-    );
-  }
-
-  // Obtener gasolineras por municipio
-  getGasolinerasPorMunicipio(municipio: string): Observable<Gasolinera[]> {
-    console.log('🌐 Llamando a API por municipio:', municipio);
-    
-    return this.http.get<any>(`${this.apiUrl}/EstacionesTerrestres/FiltroMunicipio/${municipio}`, {
-      headers: this.httpHeaders
-    }).pipe(
-      tap(response => console.log('📦 Respuesta municipio:', response?.ListaEESSPrecio?.length || 0)),
-      map(response => this.transformarDatosAPI(response)),
-      catchError(error => {
-        console.error('❌ Error municipio:', error);
-        return of([]);
-      })
-    );
-  }
-
-  // Transformar datos de la API
   private transformarDatosAPI(data: any): Gasolinera[] {
     if (!data?.ListaEESSPrecio) {
       console.log('⚠️ No hay ListaEESSPrecio en la respuesta');
       return [];
     }
 
-    console.log('🔄 Transformando', data.ListaEESSPrecio.length, 'gasolineras...');
-    
-    const gasolineras = data.ListaEESSPrecio.map((estacion: any, index: number) => {
-      const gasolinera: Gasolinera = {
-        id: estacion['IDEESS'] || '',
-        codigoPostal: estacion['C.P.'] || '',
-        direccion: estacion['Dirección'] || '',
-        horario: estacion['Horario'] || '',
-        latitud: this.parsearCoordenada(estacion['Latitud']),  // Cambiado de latitud a lat
-        longitud: this.parsearCoordenada(estacion['Longitud (WGS84)']), // Cambiado de longitud a lon
-        localidad: estacion['Localidad'] || '',
-        margen: estacion['Margen'] || '',
-        municipio: estacion['Municipio'] || '',
-        provincia: estacion['Provincia'] || '',
-        remision: estacion['Remisión'] || '',
-        rotulo: estacion['Rótulo'] || '',
-        tipoVenta: estacion['Tipo Venta'] || '',
-        bioEtanol: estacion['% BioEtanol'] || '',
-        esterMetilico: estacion['% Éster metílico'] || '',
-        porcentajeBioEtanol: estacion['Porcentaje BioEtanol'] || '',
-        porcentajeEsterMetilico: estacion['Porcentaje Éster metílico'] || '',
-  
-  // Objeto de precios
-  precios: {
-    'Gasolina 95 E5': this.parsearPrecio(estacion['Precio Gasolina 95 E5']),
-    'Gasolina 98 E5': this.parsearPrecio(estacion['Precio Gasolina 98 E5']),
-    'Gasóleo A': this.parsearPrecio(estacion['Precio Gasóleo A']),
-    'Gasóleo Premium': this.parsearPrecio(estacion['Precio Gasóleo Premium']),
-    'GLP': this.parsearPrecio(estacion['Precio Gases licuados del petróleo'])
-  },
-  
-  // Precios individuales
-  precioGasolina95: this.parsearPrecio(estacion['Precio Gasolina 95 E5']),
-  precioGasolina98: this.parsearPrecio(estacion['Precio Gasolina 98 E5']),
-  precioDiesel: this.parsearPrecio(estacion['Precio Gasóleo A']),
-  precioDieselPremium: this.parsearPrecio(estacion['Precio Gasóleo Premium']),
-  precioGLP: this.parsearPrecio(estacion['Precio Gases licuados del petróleo'])
-};
-      
-      // Log de la primera gasolinera para debug
-      if (index === 0) {
-        console.log('🔍 Ejemplo gasolinera transformada:', {
-          rotulo: gasolinera.rotulo,
-          direccion: gasolinera.direccion,
-          latitud: gasolinera.latitud,
-          longitud: gasolinera.longitud,
-          precio95: gasolinera.precioGasolina95,
-          precioDiesel: gasolinera.precioDiesel
-        });
-      }
-      
-      return gasolinera;
-    });
+    const gasolineras = data.ListaEESSPrecio.map((estacion: any) => ({
+      id: estacion['IDEESS'] || '',
+      rotulo: estacion['Rótulo'] || '',
+      direccion: estacion['Dirección'] || '',
+      latitud: this.parsearCoordenada(estacion['Latitud']),
+      longitud: this.parsearCoordenada(estacion['Longitud (WGS84)']),
+      horario: estacion['Horario'] || '',
+      municipio: estacion['Municipio'] || '',
+      provincia: estacion['Provincia'] || '',
+      precioGasolina95: this.parsearPrecio(estacion['Precio Gasolina 95 E5']),
+      precioGasolina98: this.parsearPrecio(estacion['Precio Gasolina 98 E5']),
+      precioDiesel: this.parsearPrecio(estacion['Precio Gasóleo A']),
+      precioDieselPremium: this.parsearPrecio(estacion['Precio Gasóleo Premium']),
+      precioGLP: this.parsearPrecio(estacion['Precio Gases licuados del petróleo'])
+    }));
 
-    console.log('✅ Transformación completada:', gasolineras.length, 'gasolineras');
-    
     // Filtrar gasolineras con coordenadas inválidas
-    const gasolinerasValidas = gasolineras.filter((g: Gasolinera) => g.latitud !== 0 && g.longitud !== 0);
+    const gasolinerasValidas = gasolineras.filter((g: Gasolinera) => 
+      g.latitud !== 0 && g.longitud !== 0
+    );
     
-    if (gasolinerasValidas.length < gasolineras.length) {
-      console.log('⚠️ Se filtraron', gasolineras.length - gasolinerasValidas.length, 
-                  'gasolineras con coordenadas inválidas');
-    }
-    
+    console.log(`✅ ${gasolinerasValidas.length} gasolineras válidas`);
     return gasolinerasValidas;
   }
 
   private parsearCoordenada(coordenada: string): number {
-    if (!coordenada || coordenada.trim() === '') {
-      console.warn('⚠️ Coordenada vacía:', coordenada);
-      return 0;
-    }
-    
-    // Limpiar y convertir
+    if (!coordenada || coordenada.trim() === '') return 0;
     const limpia = coordenada.replace(',', '.').trim();
     const numero = parseFloat(limpia);
-    
-    if (isNaN(numero)) {
-      console.warn('⚠️ Coordenada no es número:', coordenada, '->', limpia);
-      return 0;
-    }
-    
-    return numero;
+    return isNaN(numero) ? 0 : numero;
   }
 
   private parsearPrecio(precio: string): number {
     if (!precio || precio.trim() === '' || precio === 'N/A' || precio === 'N/D') {
       return 0;
     }
-    
-    // Limpiar y convertir
     const limpio = precio.replace(',', '.').trim();
     const numero = parseFloat(limpio);
-    
-    if (isNaN(numero)) {
-      console.warn('⚠️ Precio no es número:', precio, '->', limpio);
-      return 0;
-    }
-    
-    return numero;
+    return isNaN(numero) ? 0 : numero;
   }
 
-  // Calcular distancia entre dos puntos (Haversine formula)
   calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    if (lat1 === 0 || lon1 === 0 || lat2 === 0 || lon2 === 0) {
-      console.warn('⚠️ Coordenadas inválidas para calcular distancia');
-      return Infinity;
-    }
-    
-    const R = 6371; // Radio de la Tierra en km
+    const R = 6371;
     const dLat = this.toRad(lat2 - lat1);
     const dLon = this.toRad(lon2 - lon1);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -261,197 +130,289 @@ export class GasolineraService {
     return value * Math.PI / 180;
   }
 
-  // Filtrar gasolineras según criterios
   filtrarGasolineras(
-    gasolineras: Gasolinera[], 
-    filtros: Filtros,
+    gasolineras: Gasolinera[],
+    filtros: Filters,
     ubicacionUsuario: Ubicacion
   ): Gasolinera[] {
-    console.log('🔧 Filtrando', gasolineras.length, 'gasolineras...');
-    console.log('📍 Ubicación usuario:', ubicacionUsuario);
-    console.log('⚙️ Filtros:', filtros);
-    
-    if (gasolineras.length === 0) {
+    console.log('🔧 Aplicando filtros:', filtros);
+    console.log(`📍 Ubicación: lat=${ubicacionUsuario.latitud}, lon=${ubicacionUsuario.longitud}`);
+
+    // Si no hay gasolineras, retornar array vacío
+    if (!gasolineras || gasolineras.length === 0) {
       console.log('⚠️ No hay gasolineras para filtrar');
       return [];
     }
-    
-    if (!ubicacionUsuario.latitud || !ubicacionUsuario.longitud) {
-      console.log('⚠️ Ubicación del usuario no válida');
-      return [];
-    }
 
-    const resultado = gasolineras
-      .map(estacion => {
-        const distancia = this.calcularDistancia(
-          ubicacionUsuario.latitud,
-          ubicacionUsuario.longitud,
-          estacion.latitud,
-          estacion.longitud
-        );
+    let resultado = gasolineras.filter((gasolinera: Gasolinera) => {
+      // 1. Calcular distancia desde el usuario
+      const distancia = this.calcularDistancia(
+        ubicacionUsuario.latitud,
+        ubicacionUsuario.longitud,
+        gasolinera.latitud,
+        gasolinera.longitud
+      );
+      
+      // 2. Filtro de distancia máxima
+      if (distancia > filtros.maxDistance) {
+        return false;
+      }
+
+      // 3. Determinar si el tipo de combustible está disponible
+      let tieneCombustible = false;
+      let precioRelevante = 0;
+
+      if (filtros.fuelType === 'all') {
+        // Para "todos los combustibles", verificar si hay ALGÚN precio disponible
+        tieneCombustible = 
+          gasolinera.precioGasolina95 > 0 || 
+          gasolinera.precioGasolina98 > 0 || 
+          gasolinera.precioDiesel > 0 || 
+          gasolinera.precioDieselPremium > 0 || 
+          gasolinera.precioGLP > 0;
         
-        return {
-          ...estacion,
-          distancia: distancia,
-          estaAbierta: this.estaAbierta(estacion.horario)
-        };
-      })
-      .filter(estacion => {
-        // Filtrar por distancia máxima
-        if (filtros.distanciaMaxima > 0 && estacion.distancia > filtros.distanciaMaxima) {
-          return false;
-        }
-
-        // Filtrar por empresas
-        if (filtros.empresas && filtros.empresas.length > 0) {
-          const empresaCoincide = filtros.empresas.some((empresa: string) => 
-            estacion.rotulo.toLowerCase().includes(empresa.toLowerCase())
-          );
-          if (!empresaCoincide) {
-            return false;
-          }
-        }
-
-        // Filtrar por tipo de combustible
-        if (filtros.tipoCombustible !== 'todos') {
-          const propiedadPrecio = `precio${this.capitalize(filtros.tipoCombustible)}` as keyof Gasolinera;
-          const precio = estacion[propiedadPrecio];
+        // Para "todos los combustibles" con filtro de precio máximo
+        if (tieneCombustible && filtros.maxPrice > 0) {
+          const preciosDisponibles = [
+            gasolinera.precioGasolina95,
+            gasolinera.precioGasolina98,
+            gasolinera.precioDiesel,
+            gasolinera.precioDieselPremium,
+            gasolinera.precioGLP
+          ].filter(p => p > 0);
           
-          if (typeof precio !== 'number' || precio <= 0) {
-            return false;
-          }
-        }
-
-        // Filtrar por precio máximo
-        if (filtros.precioMaximo > 0) {
-          let precioRelevante: number;
-          
-          if (filtros.tipoCombustible === 'todos') {
-            const precios = [
-              estacion.precioGasolina95 || Infinity,
-              estacion.precioGasolina98 || Infinity,
-              estacion.precioDiesel || Infinity,
-              estacion.precioDieselPremium || Infinity,
-              estacion.precioGLP || Infinity
-            ];
-            precioRelevante = Math.min(...precios);
-          } else {
-            const propiedadPrecio = `precio${this.capitalize(filtros.tipoCombustible)}` as keyof Gasolinera;
-            precioRelevante = estacion[propiedadPrecio] as number || Infinity;
-          }
-          
-          if (precioRelevante > filtros.precioMaximo) {
-            return false;
-          }
-        }
-
-        // Filtrar solo abiertas
-        if (filtros.soloAbiertas && !estacion.estaAbierta) {
-          return false;
-        }
-
-        return true;
-      })
-      .sort((a, b) => {
-        switch (filtros.ordenarPor) {
-          case 'precio':
-            let precioA: number, precioB: number;
-            
-            if (filtros.tipoCombustible === 'todos') {
-              const preciosA = [
-                a.precioGasolina95 || Infinity,
-                a.precioDiesel || Infinity,
-                a.precioGLP || Infinity
-              ];
-              const preciosB = [
-                b.precioGasolina95 || Infinity,
-                b.precioDiesel || Infinity,
-                b.precioGLP || Infinity
-              ];
-              precioA = Math.min(...preciosA);
-              precioB = Math.min(...preciosB);
-            } else {
-              const propiedad = `precio${this.capitalize(filtros.tipoCombustible)}` as keyof Gasolinera;
-              precioA = a[propiedad] as number || Infinity;
-              precioB = b[propiedad] as number || Infinity;
+          if (preciosDisponibles.length > 0) {
+            const precioMinimo = Math.min(...preciosDisponibles);
+            if (precioMinimo > filtros.maxPrice) {
+              return false;
             }
-            
-            return precioA - precioB;
-          
-          case 'distancia':
-            return (a.distancia || Infinity) - (b.distancia || Infinity);
-          
-          case 'nombre':
-            return a.rotulo.localeCompare(b.rotulo);
-          
-          default:
-            return 0;
+          }
         }
-      })
-      .map((estacion, index, array) => ({
-        ...estacion,
-        esBarata: index === 0 // Marcar la más barata
-      }));
+      } else {
+        // Para un tipo de combustible específico
+        precioRelevante = this.obtenerPrecioPorTipo(gasolinera, filtros.fuelType);
+        tieneCombustible = precioRelevante > 0;
+        
+        if (!tieneCombustible) {
+          return false;
+        }
+        
+        // Filtro de precio máximo para combustible específico
+        if (filtros.maxPrice > 0 && precioRelevante > filtros.maxPrice) {
+          return false;
+        }
+      }
 
-    console.log('📊 Resultado filtrado:', resultado.length, 'gasolineras');
-    
-    if (resultado.length > 0) {
-      console.log('🏆 Primera gasolinera después de filtrar:', {
-        rotulo: resultado[0].rotulo,
-        distancia: resultado[0].distancia?.toFixed(2),
-        precio95: resultado[0].precioGasolina95,
-        precioDiesel: resultado[0].precioDiesel
-      });
+      // 4. Filtro de empresas con normalización mejorada
+      if (filtros.companies && filtros.companies.length > 0) {
+        const empresaNormalizada = this.companyNormalizer.normalizeCompanyName(gasolinera.rotulo);
+        let pertenece = false;
+        
+        if (empresaNormalizada) {
+          // Verificar si alguna de las empresas seleccionadas coincide con la normalizada
+          pertenece = filtros.companies.some(empresa => 
+            this.companyNormalizer.belongsToCompany(gasolinera.rotulo, empresa)
+          );
+        } else {
+          // Si no se puede normalizar, verificar coincidencia exacta
+          pertenece = filtros.companies.includes(gasolinera.rotulo);
+        }
+        
+        if (filtros.companyMode === 'include') {
+          // Modo INCLUIR: mostrar SOLO las empresas seleccionadas
+          if (!pertenece) {
+            return false;
+          }
+        } else {
+          // Modo EXCLUIR: excluir las empresas seleccionadas
+          if (pertenece) {
+            return false;
+          }
+        }
+      }
+
+      // 5. Filtro de "solo abiertas" - VERSIÓN MEJORADA
+      if (filtros.onlyOpen) {
+        if (!this.estaAbiertaSegunHorario(gasolinera.horario || '')) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    console.log(`✅ ${resultado.length} gasolineras después de filtros (de ${gasolineras.length})`);
+
+    // Si no hay resultados, hacer un análisis de por qué
+    if (resultado.length === 0) {
+      this.analizarPorQueNoHayResultados(gasolineras, filtros, ubicacionUsuario);
     }
-    
+
     return resultado;
   }
 
-  private estaAbierta(horario: string): boolean {
-    if (!horario) return true;
+  // Función para verificar si está abierto según horario - VERSIÓN MEJORADA
+  private estaAbiertaSegunHorario(horario: string): boolean {
+    if (!horario || horario.trim() === '') {
+      return true; // Sin información, asumir abierto
+    }
     
     const horarioLower = horario.toLowerCase();
     
-    if (horarioLower.includes('24h') || 
-        horarioLower.includes('24 horas') ||
-        horarioLower.includes('24 horas/día')) {
+    // Casos especiales - DEFINITIVAMENTE ABIERTOS
+    const indicadoresAbierto24h = [
+      '24h',
+      '24 horas',
+      '24horas',
+      'siempre abierto',
+      'abierto 24',
+      'abierto todo el día'
+    ];
+    
+    // Casos especiales - DEFINITIVAMENTE CERRADOS
+    const indicadoresCerrado = [
+      'cerrado',
+      'cerrada', 
+      'cl.',
+      'cl ',
+      'c/',
+      'permanente',
+      'clausurada',
+      'fuera de servicio',
+      'no disponible'
+    ];
+    
+    // Verificar si está claramente cerrado
+    const estaClaramenteCerrado = indicadoresCerrado.some(indicador => 
+      horarioLower.includes(indicador)
+    );
+    
+    // Verificar si está abierto 24h
+    const estaAbierto24h = indicadoresAbierto24h.some(indicador => 
+      horarioLower.includes(indicador)
+    );
+    
+    // Si está claramente cerrado y no está abierto 24h, filtrar
+    if (estaClaramenteCerrado && !estaAbierto24h) {
+      return false;
+    }
+    
+    // Si está abierto 24h, mostrar
+    if (estaAbierto24h) {
       return true;
     }
     
-    if (horarioLower.includes('l-d') || 
-        horarioLower.includes('lunes a domingo')) {
-      return true;
-    }
-    
-    // Intentar analizar horario (podría mejorarse)
-    const ahora = new Date();
-    const horaActual = ahora.getHours();
-    const minutosActual = ahora.getMinutes();
-    const tiempoActual = horaActual * 60 + minutosActual;
-    
-    // Ejemplo: "08:00-22:00"
-    const regex = /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/;
-    const match = horario.match(regex);
-    
-    if (match) {
-      const horaInicio = parseInt(match[1]) * 60 + parseInt(match[2]);
-      const horaFin = parseInt(match[3]) * 60 + parseInt(match[4]);
-      
-      // Si cierra después de medianoche (ej: 22:00-06:00)
-      if (horaFin < horaInicio) {
-        return tiempoActual >= horaInicio || tiempoActual <= horaFin;
-      }
-      
-      return tiempoActual >= horaInicio && tiempoActual <= horaFin;
-    }
-    
-    // Por defecto, asumir abierta
+    // Para horarios específicos (ej: "L-D: 07:00-22:00"), podríamos verificar hora actual
+    // Pero por ahora, si no es claramente cerrado, lo mostramos
     return true;
   }
 
-  private capitalize(str: string): string {
-    if (!str) return '';
-    return str.charAt(0).toUpperCase() + str.slice(1);
+  private analizarPorQueNoHayResultados(
+    gasolineras: Gasolinera[],
+    filtros: Filters,
+    ubicacionUsuario: Ubicacion
+  ): void {
+    console.log('🔍 Analizando por qué no hay resultados...');
+    
+    // Contar gasolineras por combustible
+    const conteoCombustible: Record<string, number> = {};
+    const tipos = ['Gasolina 95 E5', 'Gasolina 98 E5', 'Gasóleo A', 'Gasóleo Premium', 'GLP'] as const;
+    
+    tipos.forEach(tipo => {
+      const disponibles = gasolineras.filter(g => 
+        this.obtenerPrecioPorTipo(g, tipo as Exclude<FuelType, 'all'>) > 0
+      );
+      conteoCombustible[tipo] = disponibles.length;
+    });
+    
+    console.log('Disponibilidad por combustible:', conteoCombustible);
+    
+    // Analizar distancias
+    const distancias = gasolineras.map(g => 
+      this.calcularDistancia(
+        ubicacionUsuario.latitud,
+        ubicacionUsuario.longitud,
+        g.latitud,
+        g.longitud
+      )
+    ).filter(d => !isNaN(d));
+    
+    if (distancias.length > 0) {
+      const distanciaMin = Math.min(...distancias);
+      const distanciaMax = Math.max(...distancias);
+      const distanciaProm = distancias.reduce((a, b) => a + b, 0) / distancias.length;
+      
+      console.log(`📏 Distancias: min=${distanciaMin.toFixed(2)}km, max=${distanciaMax.toFixed(2)}km, prom=${distanciaProm.toFixed(2)}km`);
+      console.log(`📏 Filtro distancia: ${filtros.maxDistance}km`);
+    }
+    
+    // Analizar precios si hay un combustible específico
+    if (filtros.fuelType !== 'all') {
+      const precios = gasolineras
+        .map(g => this.obtenerPrecioPorTipo(g, filtros.fuelType as Exclude<FuelType, 'all'>))
+        .filter(p => p > 0);
+      
+      if (precios.length > 0) {
+        const precioMin = Math.min(...precios);
+        const precioMax = Math.max(...precios);
+        const precioProm = precios.reduce((a, b) => a + b, 0) / precios.length;
+        
+        console.log(`💰 ${filtros.fuelType}: min=${precioMin.toFixed(3)}, max=${precioMax.toFixed(3)}, prom=${precioProm.toFixed(3)}`);
+        console.log(`💰 Filtro precio: ${filtros.maxPrice > 0 ? filtros.maxPrice : 'Sin límite'}`);
+      } else {
+        console.log(`💰 ${filtros.fuelType}: No hay precios disponibles en la zona`);
+      }
+    }
   }
-  
+
+  private getCampoPorTipo(fuelType: Exclude<FuelType, 'all'>): keyof Gasolinera {
+    switch (fuelType) {
+      case 'Gasolina 95 E5': return 'precioGasolina95';
+      case 'Gasolina 98 E5': return 'precioGasolina98';
+      case 'Gasóleo A': return 'precioDiesel';
+      case 'Gasóleo Premium': return 'precioDieselPremium';
+      case 'GLP': return 'precioGLP';
+      default: return 'precioGasolina95';
+    }
+  }
+
+  private obtenerPrecioPorTipo(gasolinera: Gasolinera, fuelType: Exclude<FuelType, 'all'>): number {
+    switch (fuelType) {
+      case 'Gasolina 95 E5': return gasolinera.precioGasolina95;
+      case 'Gasolina 98 E5': return gasolinera.precioGasolina98;
+      case 'Gasóleo A': return gasolinera.precioDiesel;
+      case 'Gasóleo Premium': return gasolinera.precioDieselPremium;
+      case 'GLP': return gasolinera.precioGLP;
+      default: return 0;
+    }
+  }
+
+  // Método para obtener estadísticas de la zona
+  obtenerEstadisticasZona(
+    gasolineras: Gasolinera[],
+    ubicacionUsuario: Ubicacion,
+    radioKm: number = 50
+  ): any {
+    const gasolinerasCercanas = gasolineras.filter(g => {
+      const distancia = this.calcularDistancia(
+        ubicacionUsuario.latitud,
+        ubicacionUsuario.longitud,
+        g.latitud,
+        g.longitud
+      );
+      return distancia <= radioKm;
+    });
+
+    const estadisticas = {
+      total: gasolinerasCercanas.length,
+      conGasolina95: gasolinerasCercanas.filter(g => g.precioGasolina95 > 0).length,
+      conGasolina98: gasolinerasCercanas.filter(g => g.precioGasolina98 > 0).length,
+      conDiesel: gasolinerasCercanas.filter(g => g.precioDiesel > 0).length,
+      conDieselPremium: gasolinerasCercanas.filter(g => g.precioDieselPremium > 0).length,
+      conGLP: gasolinerasCercanas.filter(g => g.precioGLP > 0).length,
+    };
+
+    console.log(`📊 Estadísticas en ${radioKm}km:`, estadisticas);
+    return estadisticas;
+  }
 }

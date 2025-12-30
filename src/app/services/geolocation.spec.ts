@@ -1,9 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { GeolocationService } from './geolocation';
 
-describe('Geolocation', () => {
+describe('GeolocationService', () => {
+  let service: GeolocationService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [GeolocationService],
+    });
+    service = TestBed.inject(GeolocationService);
+  });
+
   it('should be created', () => {
-    const service = TestBed.inject(Geolocation);
     expect(service).toBeTruthy();
   });
 });

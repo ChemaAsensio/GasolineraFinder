@@ -1,53 +1,52 @@
 // src/app/models/filter.ts
-
-export type BrandMode = 'all' | 'whitelist' | 'blacklist';
-
-export type FuelType =
+export type FuelType = 
   | 'Gasolina 95 E5'
   | 'Gasolina 98 E5'
   | 'Gasóleo A'
   | 'Gasóleo Premium'
-  | 'GLP';
+  | 'GLP'
+  | 'all';  
 
-/**
- * Valores “cortos” que usa la UI / filtros internos
- */
-export type TipoCombustible =
-  | 'todos'
-  | 'gasolina95'
-  | 'gasolina98'
-  | 'diesel'
-  | 'dieselPremium'
-  | 'glp';
-
-export type OrdenarPor = 'precio' | 'distancia' | 'nombre';
-
-/**
- * MODELO UNIFICADO (castellano) -> lo usa Home + GasolineraService
- */
-export interface Filtros {
-  tipoCombustible: TipoCombustible;
-  empresas: string[];
-  precioMaximo: number;
-  distanciaMaxima: number;
-  soloAbiertas: boolean;
-  ordenarPor: OrdenarPor;
+export interface Filters {
+  fuelType: FuelType;
+  companies: string[];
+  maxPrice: number;
+  maxDistance: number;
+  onlyOpen: boolean;
+  sortBy: 'distance' | 'price';
+  companyMode: 'include' | 'exclude';
 }
 
-/**
- * Si en algún archivo quedó importado Filter, lo mantenemos para no romper nada.
- */
-export type Filter = Filtros;
+// Mapeo de nombres normalizados a patrones de búsqueda
+export const COMPANY_PATTERNS: Record<string, string[]> = {
+  'REPSOL': ['REPSOL', 'REPSOL AUTOGAS', 'REPSOL BUTANO'],
+  'CEPSA': ['CEPSA', 'CEPSA URBAN', 'CEPSA EXPRESS'],
+  'BP': ['BP', 'BP OIL', 'BP SERVICE'],
+  'GALP': ['GALP', 'GALPENERGIA'],
+  'AVIA': ['AVIA'],
+  'PETRONOR': ['PETRONOR'],
+  'CARREFOUR': ['CARREFOUR', 'CARREFOUR EXPRESS'],
+  'ALCAMPO': ['ALCAMPO', 'ALCAMPO SUPERMERCADOS'],
+  'E.LECLERC': ['E.LECLERC', 'LECLERC', 'CENTRE LECLERC'],
+  'SHELL': ['SHELL', 'SHELL AUTOSERVICIO']
+};
 
-/**
- * Mapa para convertir tipoCombustible -> clave real dentro de precios/precios[]
- * (porque la API devuelve nombres largos)
- */
-export const TIPO_TO_FUEL_LABEL: Record<TipoCombustible, FuelType | null> = {
-  todos: null,
+export const EMPRESAS_NORMALIZADAS = Object.keys(COMPANY_PATTERNS);
+
+export const TIPO_TO_FUEL_LABEL: Record<FuelType, string> = {
+  'Gasolina 95 E5': 'Gasolina 95',
+  'Gasolina 98 E5': 'Gasolina 98',
+  'Gasóleo A': 'Diésel',
+  'Gasóleo Premium': 'Diésel Premium',
+  'GLP': 'GLP',
+  'all': 'Todos los combustibles'
+};
+
+export const FUEL_TYPE_KEYS: Record<string, FuelType> = {
   gasolina95: 'Gasolina 95 E5',
   gasolina98: 'Gasolina 98 E5',
   diesel: 'Gasóleo A',
   dieselPremium: 'Gasóleo Premium',
   glp: 'GLP',
+  all: 'all'
 };

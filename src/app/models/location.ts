@@ -1,10 +1,10 @@
-// src/app/models/location.ts
-
 export interface Ubicacion {
+  calle?: string;
+  numero?: string;
+  ciudad?: string;
+  provincia?: string;
   latitud: number;
   longitud: number;
-  ciudad: string;
+  direccionCompleta?: string;
+  direccion?: string; // Mantener por compatibilidad
 }
-
-// Alias por compatibilidad si alguien importaba Location
-export type Location = Ubicacion;
