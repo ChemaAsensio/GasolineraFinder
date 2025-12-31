@@ -1,149 +1,258 @@
 <div class="home-container">
-  <h2>GasolineraFinder</h2>
 
-  <!-- Selector de modo -->
-  <div class="mode-selection">
-    <select [(ngModel)]="modoSeleccionado" (change)="onModoCambiado()">
-      <option value="buscar">Buscar Gasolineras</option>
-      <option value="ruta">Gasolineras en Ruta</option>
-    </select>
-  </div>
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <a class="brand" routerLink="/">
+      <img
+        class="brand-logo"
+        src="assets/logo-GasolineraFinder.png"
+        alt="GasolineraFinder"
+      />
+    </a>
 
-  <!-- Dirección de Inicio -->
-  <div class="direccion-container">
-    <h3>Inicio</h3>
-    
-    <div class="campo-direccion">
-      <label for="calleInicio">Calle:</label>
-      <input id="calleInicio" [(ngModel)]="ubicacionUsuario.calle" placeholder="Nombre de la calle" />
-    </div>
-    
-    <div class="campo-direccion">
-      <label for="numeroInicio">Número:</label>
-      <input id="numeroInicio" [(ngModel)]="ubicacionUsuario.numero" placeholder="Número" />
-    </div>
-    
-    <div class="campo-direccion">
-      <label for="ciudadInicio">Ciudad:</label>
-      <input id="ciudadInicio" [(ngModel)]="ubicacionUsuario.ciudad" placeholder="Ciudad" />
-    </div>
-    
-    <div class="campo-direccion">
-      <label for="provinciaInicio">Provincia:</label>
-      <input id="provinciaInicio" [(ngModel)]="ubicacionUsuario.provincia" placeholder="Provincia" />
-    </div>
-    
-    <button (click)="obtenerUbicacion()" class="btn-obtener-ubicacion">
-      📍 Obtener mi ubicación
+    <nav class="topnav" aria-label="Navegación principal">
+      <a routerLink="/about" routerLinkActive="active">About us</a>
+      <a routerLink="/contact" routerLinkActive="active">Contacto</a>
+    </nav>
+  </header>
+
+  <!-- MODE SWITCH -->
+  <div class="mode-switch" role="tablist" aria-label="Modo de búsqueda">
+    <button
+      type="button"
+      class="mode-pill"
+      [class.active]="modoSeleccionado === 'buscar'"
+      (click)="setModo('buscar')"
+      aria-pressed="{{ modoSeleccionado === 'buscar' }}"
+    >
+      Buscar Gasolineras
     </button>
-    
-    <!-- Botón para analizar la zona -->
-    <button (click)="analizarZona()" class="btn-analizar-zona" style="margin-top: 10px;">
-      📊 Analizar zona
+
+    <button
+      type="button"
+      class="mode-pill"
+      [class.active]="modoSeleccionado === 'ruta'"
+      (click)="setModo('ruta')"
+      aria-pressed="{{ modoSeleccionado === 'ruta' }}"
+    >
+      Gasolineras en Ruta
     </button>
   </div>
 
-  <div style="margin-top: 10px; display: flex; gap: 10px;">
-  <button (click)="depurarFiltroAbiertas()" class="btn-analizar-zona">
-    🔍 Depurar filtro "abiertas"
-  </button>
-  
-  <button (click)="exportarDatosParaDepuracion()" class="btn-analizar-zona">
-    📊 Exportar datos depuración
+  <!-- ACORDEÓN: Ubicación de Inicio -->
+  <div class="acordeon-mejorado" [class.cerrado]="!acordeonAbierto.inicio">
+    <div class="acordeon-cabecera" (click)="toggleAcordeon('inicio')">
+      <div class="acordeon-titulo">
+        <div class="acordeon-icono-grande">
+          <span class="icono">🏠</span>
+        </div>
+        <div class="acordeon-texto">
+          <h3>Inicio</h3>
+        </div>
+      </div>
+      <div class="acordeon-flecha" [class.abierto]="acordeonAbierto.inicio">
+        <span>▼</span>
+      </div>
+    </div>
+
+    <div class="acordeon-contenido" *ngIf="acordeonAbierto.inicio">
+      <div class="contenido-interior">
+        <div class="direccion-container">
+          <div class="campos-grid">
+            <div class="campo-direccion">
+              <label for="calleInicio">📏 Calle:</label>
+              <input id="calleInicio" [(ngModel)]="ubicacionUsuario.calle" placeholder="Ej: Gran Vía" />
+            </div>
+
+            <div class="campo-direccion">
+              <label for="numeroInicio">🔢 Número:</label>
+              <input id="numeroInicio" [(ngModel)]="ubicacionUsuario.numero" placeholder="Ej: 28" />
+            </div>
+
+            <div class="campo-direccion">
+              <label for="ciudadInicio">🏙️ Ciudad:</label>
+              <input id="ciudadInicio" [(ngModel)]="ubicacionUsuario.ciudad" placeholder="Ej: Madrid" />
+            </div>
+
+            <div class="campo-direccion">
+              <label for="provinciaInicio">🗺️ Provincia:</label>
+              <input id="provinciaInicio" [(ngModel)]="ubicacionUsuario.provincia" placeholder="Ej: Madrid" />
+            </div>
+          </div>
+
+          <div class="botones-accion-container">
+           <button (click)="obtenerUbicacion()" class="btn-ubicacion-elegante" title="Detectar mi ubicación automáticamente">
+            <span class="btn-ubicacion-icono">📍</span>
+            <span class="btn-ubicacion-texto">Mi ubicación</span>
+        </button>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACORDEÓN: Ubicación de Destino (solo modo ruta) -->
+  <div
+    class="acordeon-mejorado"
+    *ngIf="modoSeleccionado === 'ruta'"
+    [class.cerrado]="!acordeonAbierto.destino"
+  >
+    <div class="acordeon-cabecera" (click)="toggleAcordeon('destino')">
+      <div class="acordeon-titulo">
+        <div class="acordeon-icono-grande">
+          <span class="icono">🎯</span>
+        </div>
+        <div class="acordeon-texto">
+          <h3>Destino</h3>
+          
+        </div>
+      </div>
+      <div class="acordeon-flecha" [class.abierto]="acordeonAbierto.destino">
+        <span>▼</span>
+      </div>
+    </div>
+
+    <div class="acordeon-contenido" *ngIf="acordeonAbierto.destino">
+      <div class="contenido-interior">
+        <div class="direccion-container">
+          <div class="campos-grid">
+            <div class="campo-direccion">
+              <label for="calleDestino">📏 Calle:</label>
+              <input id="calleDestino" [(ngModel)]="destino.calle" placeholder="Ej: Avenida Diagonal" />
+            </div>
+
+            <div class="campo-direccion">
+              <label for="numeroDestino">🔢 Número:</label>
+              <input id="numeroDestino" [(ngModel)]="destino.numero" placeholder="Ej: 407" />
+            </div>
+
+            <div class="campo-direccion">
+              <label for="ciudadDestino">🏙️ Ciudad:</label>
+              <input id="ciudadDestino" [(ngModel)]="destino.ciudad" placeholder="Ej: Barcelona" />
+            </div>
+
+            <div class="campo-direccion">
+              <label for="provinciaDestino">🗺️ Provincia:</label>
+              <input id="provinciaDestino" [(ngModel)]="destino.provincia" placeholder="Ej: Barcelona" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACORDEÓN: Filtros -->
+  <div class="acordeon-mejorado" [class.cerrado]="!acordeonAbierto.filtros">
+    <div class="acordeon-cabecera" (click)="toggleAcordeon('filtros')">
+      <div class="acordeon-titulo">
+        <div class="acordeon-icono-grande">
+          <span class="icono">⚙️</span>
+        </div>
+        <div class="acordeon-texto">
+          <h3>Filtros</h3>
+        </div>
+      </div>
+      <div class="acordeon-flecha" [class.abierto]="acordeonAbierto.filtros">
+        <span>▼</span>
+      </div>
+    </div>
+
+    <div class="acordeon-contenido" *ngIf="acordeonAbierto.filtros">
+      <div class="contenido-interior">
+        <app-filters
+          [empresasDisponibles]="empresasDisponibles"
+          [filters]="filters"
+          (filterChange)="onFiltersCambiados($event)"
+        ></app-filters>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTÓN DE BÚSQUEDA -->
+<div class="botones-busqueda-container">
+  <button 
+    (click)="ejecutarBusqueda()" 
+    class="btn-busqueda-principal"
+    [class.cargando]="busquedaEnCurso"
+    [disabled]="busquedaEnCurso">
+    <span class="btn-busqueda-icono">{{ busquedaEnCurso ? '⏳' : '🔍' }}</span>
+    <span class="btn-busqueda-texto">
+      {{ busquedaEnCurso ? 'Buscando...' : 'Buscar gasolineras' }}
+      <span *ngIf="!busquedaEnCurso && mostrarResultados && gasolinerasFiltradas.length > 0" class="contador-preview">
+        
+      </span>
+    </span>
   </button>
 </div>
 
-  <!-- Dirección de Destino (solo en modo "ruta") -->
-  <div *ngIf="modoSeleccionado === 'ruta'" class="direccion-container">
-    <h3>Destino</h3>
-    
-    <div class="campo-direccion">
-      <label for="calleDestino">Calle:</label>
-      <input id="calleDestino" [(ngModel)]="destino.calle" placeholder="Nombre de la calle" />
+  <!-- ACORDEÓN: Resultados -->
+  <div class="acordeon-mejorado" 
+       id="resultados-container"
+       *ngIf="mostrarResultados" 
+       [class.cerrado]="!acordeonAbierto.resultados">
+
+    <div class="acordeon-cabecera" (click)="toggleAcordeon('resultados')">
+      <div class="acordeon-titulo">
+        <div class="acordeon-icono-grande">
+          <span class="icono">⛽</span>
+        </div>
+        <div class="acordeon-texto">
+          <h3>Resultados</h3>
+        </div>
+      </div>
+      <div class="acordeon-flecha" [class.abierto]="acordeonAbierto.resultados">
+        <span>▼</span>
+      </div>
     </div>
     
-    <div class="campo-direccion">
-      <label for="numeroDestino">Número:</label>
-      <input id="numeroDestino" [(ngModel)]="destino.numero" placeholder="Número" />
+    <div class="acordeon-contenido" *ngIf="acordeonAbierto.resultados">
+      <div class="contenido-interior">
+        
+        <!-- Mensajes de estado dentro del acordeón -->
+        <div *ngIf="cargando" class="estado-cargando">
+          <p>Cargando gasolineras...</p>
+        </div>
+
+        <div *ngIf="error" class="estado-error">
+          <p>❌ {{ error }}</p>
+        </div>
+
+        <div *ngIf="!cargando && !error && gasolinerasFiltradas.length === 0" class="estado-vacio">
+          <p>📭 No se encontraron gasolineras con los filtros aplicados</p>
+          <button (click)="restablecerFiltros()" class="btn-secundario">
+            Restablecer filtros
+          </button>
+        </div>
+
+        <!-- Mostrar resultados solo si hay gasolineras -->
+        <div *ngIf="!cargando && !error && gasolinerasFiltradas.length > 0">
+          <app-summary-box 
+            [stations]="gasolinerasFiltradas"
+            [filters]="filters"
+            [ubicacionUsuario]="ubicacionUsuario"> 
+          </app-summary-box>
+        </div>
+
+      </div>
     </div>
-    
-    <div class="campo-direccion">
-      <label for="ciudadDestino">Ciudad:</label>
-      <input id="ciudadDestino" [(ngModel)]="destino.ciudad" placeholder="Ciudad" />
-    </div>
-    
-    <div class="campo-direccion">
-      <label for="provinciaDestino">Provincia:</label>
-      <input id="provinciaDestino" [(ngModel)]="destino.provincia" placeholder="Provincia" />
-    </div>
+
   </div>
 
-  <!-- Filtros -->
-  <app-filters 
-    [empresasDisponibles]="empresasDisponibles"
-    [filters]="filters"
-    (filterChange)="onFiltersCambiados($event)">
-  </app-filters>
-
-  <!-- Resumen de gasolineras -->
-<app-summary-box 
-  *ngIf="gasolinerasFiltradas.length > 0"
-  [stations]="gasolinerasFiltradas"
-  [filters]="filters">
-</app-summary-box>
-  <!-- Lista de gasolineras -->
-  <div *ngIf="gasolinerasFiltradas.length > 0">
-    <h3>Gasolineras encontradas ({{ gasolinerasFiltradas.length }})</h3>
-    <app-station-list 
-      [stations]="gasolinerasFiltradas"
-      [filters]="filters">
-    </app-station-list>
-  </div>
-
-  <!-- Mensajes de estado -->
-  <div *ngIf="cargando" class="alert alert-info">
-    <p>Cargando gasolineras...</p>
-  </div>
-  
-  <div *ngIf="error" class="alert alert-error">
-    <p>{{ error }}</p>
-  </div>
-  
-  <div *ngIf="!cargando && !error && gasolinerasFiltradas.length === 0" class="alert alert-info">
-    <p>No se encontraron gasolineras con los filtros aplicados.</p>
-    <button (click)="restablecerFiltros()" class="btn-restablecer">
-      Restablecer filtros
+  <!-- Botón Restablecer todo (fuera del acordeón de resultados) -->
+  <div class="restablecer-container">
+    <button (click)="restablecerTodo()" class="btn-restablecer-todo">
+      🔄 Restablecer todo
     </button>
   </div>
 
-  <!-- Detalles de gasolinera seleccionada -->
-  <div *ngIf="gasolineraSeleccionada" class="card mt-4">
-    <div class="card-header">
-      <h3>{{ gasolineraSeleccionada.rotulo }}</h3>
-    </div>
-    <div class="card-body">
-      <p><strong>Dirección:</strong> {{ gasolineraSeleccionada.direccion }}</p>
-      <p><strong>Horario:</strong> {{ gasolineraSeleccionada.horario }}</p>
-      <p><strong>Municipio:</strong> {{ gasolineraSeleccionada.municipio }}</p>
-      <p><strong>Provincia:</strong> {{ gasolineraSeleccionada.provincia }}</p>
-      <p><strong>Precios:</strong></p>
-      <ul>
-        <li *ngIf="gasolineraSeleccionada.precioGasolina95 > 0">
-          Gasolina 95: {{ gasolineraSeleccionada.precioGasolina95 | number:'1.3-3' }} €/L
-        </li>
-        <li *ngIf="gasolineraSeleccionada.precioGasolina98 > 0">
-          Gasolina 98: {{ gasolineraSeleccionada.precioGasolina98 | number:'1.3-3' }} €/L
-        </li>
-        <li *ngIf="gasolineraSeleccionada.precioDiesel > 0">
-          Diésel: {{ gasolineraSeleccionada.precioDiesel | number:'1.3-3' }} €/L
-        </li>
-        <li *ngIf="gasolineraSeleccionada.precioDieselPremium > 0">
-          Diésel Premium: {{ gasolineraSeleccionada.precioDieselPremium | number:'1.3-3' }} €/L
-        </li>
-        <li *ngIf="gasolineraSeleccionada.precioGLP > 0">
-          GLP: {{ gasolineraSeleccionada.precioGLP | number:'1.3-3' }} €/L
-        </li>
-      </ul>
-    </div>
-  </div>
+  <!-- Botón Scroll to Top -->
+  <button 
+    class="scroll-top-btn" 
+    [class.visible]="mostrarBotonScrollTop"
+    (click)="scrollToTop()"
+    aria-label="Volver arriba"
+    title="Volver arriba">
+    ↑
+  </button>
+
 </div>

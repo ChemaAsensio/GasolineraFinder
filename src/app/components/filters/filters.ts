@@ -45,7 +45,6 @@ export class FiltersComponent implements OnInit {
   ];
   
   tiposCombustible: {value: FuelType, label: string}[] = [
-    { value: 'all', label: 'Todos los combustibles' },
     { value: 'Gasolina 95 E5', label: 'Gasolina 95 E5' },
     { value: 'Gasolina 98 E5', label: 'Gasolina 98 E5' },
     { value: 'Gasóleo A', label: 'Gasóleo A' },
@@ -78,19 +77,29 @@ export class FiltersComponent implements OnInit {
     this.emitChanges();
   }
 
-  toggleCompany(empresa: string, event: Event): void {
-    const isChecked = (event.target as HTMLInputElement).checked;
-    
-    if (isChecked) {
-      if (!this.filters.companies.includes(empresa)) {
-        this.filters.companies = [...this.filters.companies, empresa];
-      }
-    } else {
-      this.filters.companies = this.filters.companies.filter(e => e !== empresa);
+ toggleCompany(empresa: string, event: Event): void {
+  const checkbox = event.target as HTMLInputElement;
+  const isChecked = checkbox.checked;
+  
+  let nuevasEmpresas = [...this.filters.companies];
+  
+  if (isChecked) {
+    // Añadir si no está ya
+    if (!nuevasEmpresas.includes(empresa)) {
+      nuevasEmpresas.push(empresa);
     }
-    
-    this.emitChanges();
+  } else {
+    // Eliminar si está
+    nuevasEmpresas = nuevasEmpresas.filter(e => e !== empresa);
   }
+  
+  this.filters = {
+    ...this.filters,
+    companies: nuevasEmpresas
+  };
+  
+  this.filterChange.emit(this.filters);
+}
 
   onCombustibleChange(value: FuelType): void {
     this.filters.fuelType = value;

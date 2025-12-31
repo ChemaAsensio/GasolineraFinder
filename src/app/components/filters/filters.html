@@ -1,22 +1,19 @@
 <div class="filters-container">
-  <div class="filters-header">
-    <h3>Filtros</h3>
-    <button type="button" class="btn-restablecer" (click)="restablecerFiltros()">
-      ↺ Restablecer
-    </button>
-  </div>
+  
 
-  <!-- Tipo de combustible -->
+  <!-- Tipo de combustible - BOTONES INLINE -->
   <div class="filter-group">
     <label class="filter-label">Tipo de combustible:</label>
-    <select 
-      class="form-select" 
-      [(ngModel)]="filters.fuelType"
-      (ngModelChange)="onCombustibleChange($event)">
-      <option *ngFor="let tipo of tiposCombustible" [ngValue]="tipo.value">
+    <div class="combustible-buttons">
+      <button 
+        *ngFor="let tipo of tiposCombustible"
+        type="button"
+        class="combustible-btn"
+        [class.active]="filters.fuelType === tipo.value"
+        (click)="onCombustibleChange(tipo.value)">
         {{ tipo.label }}
-      </option>
-    </select>
+      </button>
+    </div>
   </div>
 
   <!-- Empresas -->
@@ -34,14 +31,10 @@
         <option value="include">Incluir seleccionadas</option>
         <option value="exclude">Excluir seleccionadas</option>
       </select>
-      <span class="help-text">
-        {{ filters.companyMode === 'include' 
-           ? 'Si no selecciona ninguna, se muestran todas. Si selecciona, solo se muestran las seleccionadas.' 
-           : 'Si no selecciona ninguna, se muestran todas. Si selecciona, se excluyen las seleccionadas.' }}
-      </span>
+      
     </div>
 
-    <!-- Lista de empresas principales (solo las 10) -->
+    <!-- Lista de empresas principales -->
     <div class="empresas-list">
       <div *ngFor="let empresa of empresasPrincipales" class="empresa-checkbox">
         <input 
@@ -55,17 +48,17 @@
     </div>
   </div>
 
-  <!-- Distancia máxima -->
+  <!-- Distancia máxima - SLIDER ANCHO -->
   <div class="filter-group">
     <div class="slider-header">
       <label class="filter-label">
         Distancia máxima: <strong class="valor-display">{{ distanciaDisplay }}</strong>
       </label>
     </div>
-    <div class="slider-container">
+    <div class="slider-container-wide">
       <input 
         type="range" 
-        class="form-range" 
+        class="form-range-wide"
         min="1" 
         max="100" 
         step="1"
@@ -73,24 +66,24 @@
         (ngModelChange)="onDistanciaChange($event)"
         #distanciaSlider
       />
-      <div class="slider-labels">
+      <div class="slider-labels-wide">
         <span>1 km</span>
         <span>100 km</span>
       </div>
     </div>
   </div>
 
-  <!-- Precio máximo -->
+  <!-- Precio máximo - SLIDER ANCHO -->
   <div class="filter-group">
     <div class="slider-header">
       <label class="filter-label">
         Precio máximo: <strong class="valor-display">{{ precioDisplay }}</strong>
       </label>
     </div>
-    <div class="slider-container">
+    <div class="slider-container-wide">
       <input 
         type="range" 
-        class="form-range" 
+        class="form-range-wide"
         min="0" 
         max="3" 
         step="0.010"
@@ -98,8 +91,8 @@
         (ngModelChange)="onPrecioChange($event)"
         #precioSlider
       />
-      <div class="slider-labels">
-        <span>0 € (Sin límite)</span>
+      <div class="slider-labels-wide">
+        <span>0 €</span>
         <span>3 €/L</span>
       </div>
     </div>
@@ -118,16 +111,24 @@
     </div>
   </div>
 
-  <!-- Ordenar por -->
+  <!-- Ordenar por - BOTONES INLINE -->
   <div class="filter-group">
     <label class="filter-label">Ordenar por:</label>
-    <select 
-      class="form-select" 
-      [(ngModel)]="filters.sortBy"
-      (ngModelChange)="onOrdenChange($event)">
-      <option *ngFor="let orden of opcionesOrden" [ngValue]="orden.value">
-        {{ orden.label }}
-      </option>
-    </select>
+    <div class="ordenar-buttons">
+      <button 
+        type="button"
+        class="ordenar-btn"
+        [class.active]="filters.sortBy === 'distance'"
+        (click)="onOrdenChange('distance')">
+        Distancia
+      </button>
+      <button 
+        type="button"
+        class="ordenar-btn"
+        [class.active]="filters.sortBy === 'price'"
+        (click)="onOrdenChange('price')">
+        Precio
+      </button>
+    </div>
   </div>
 </div>

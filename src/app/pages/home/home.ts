@@ -1,10 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GasolineraService } from '../../services/api/gasolinera';
 import { GeolocationService } from '../../services/geolocation';
 import { StorageService } from '../../services/storage';
-import { CompanyNormalizerService } from '../../services/company-normalizer'; // ← Agrega esta importación
+import { CompanyNormalizerService } from '../../services/company-normalizer';
 import { Gasolinera } from '../../models/station';
 import { Filters } from '../../models/filter';
 import { FiltersComponent } from '../../components/filters/filters';
@@ -16,21 +16,21 @@ import { Ubicacion } from '../../models/location';
   selector: 'app-home',
   standalone: true,
   imports: [
-    CommonModule, 
-    FormsModule, 
+    CommonModule,
+    FormsModule,
     FiltersComponent,
-    SummaryBoxComponent,  // ← Cambia SummaryBox por SummaryBoxComponent
+    SummaryBoxComponent,
     StationList
   ],
   templateUrl: './home.html',
   styleUrls: ['./home.scss'],
 })
-export class Home implements OnInit {
+export class Home implements OnInit, OnDestroy, AfterViewChecked {
   gasolineras: Gasolinera[] = [];
   gasolinerasFiltradas: Gasolinera[] = [];
   gasolineraSeleccionada: Gasolinera | null = null;
 
-  modoSeleccionado: 'buscar' | 'ruta' = 'buscar';  
+  modoSeleccionado: 'buscar' | 'ruta' = 'buscar';
 
   ubicacionUsuario: Ubicacion = {
     latitud: 40.4168,
@@ -50,7 +50,7 @@ export class Home implements OnInit {
   };
 
   filters: Filters = {
-    fuelType: 'all',
+    fuelType: 'Gasolina 95 E5',
     companies: [],
     maxPrice: 0,
     maxDistance: 50,
@@ -60,14 +60,33 @@ export class Home implements OnInit {
   };
 
   cargando = false;
+  busquedaEnCurso = false;
+  mostrarResultados = false;
   error: string | null = null;
   empresasDisponibles: string[] = [];
+  mostrarBotonScrollTop: boolean = false;
+
+  acordeonAbierto = {
+    modo: false,
+    inicio: false,
+    destino: false,
+    filtros: false,
+    resultados: false,
+    detalles: false,
+    depuracion: false
+  };
+
+  // Variable para guardar los filtros mientras el usuario los modifica
+  filtersTemporales: Filters = { ...this.filters };
+
+  private resizeObserver: ResizeObserver | null = null;
+  private mutationObserver: MutationObserver | null = null;
 
   constructor(
     private gasolineraService: GasolineraService,
     private geolocationService: GeolocationService,
     private storageService: StorageService,
-    private companyNormalizer: CompanyNormalizerService // ← Agrega esta inyección
+    private companyNormalizer: CompanyNormalizerService
   ) {}
 
   ngOnInit(): void {
@@ -75,13 +94,128 @@ export class Home implements OnInit {
     if (savedLocation) {
       this.ubicacionUsuario = savedLocation;
     }
-    
-    // Inicializar companyMode si no existe (para compatibilidad)
+
+    const savedFilters = this.storageService.obtenerFiltros();
+    if (savedFilters) {
+      this.filtersTemporales = savedFilters;
+      this.filters = { ...savedFilters };
+    }
+
     if (!this.filters.companyMode) {
       this.filters.companyMode = 'include';
+      this.filtersTemporales.companyMode = 'include';
+    }
+
+    this.cargarGasolineras();
+    
+    // Configurar observadores para detectar cambios en el DOM
+    this.setupObservers();
+    
+    // Verificar inicialmente
+    setTimeout(() => this.checkScrollNeeded(), 100);
+  }
+
+  ngAfterViewChecked(): void {
+    // Verificar después de cada cambio en la vista
+    setTimeout(() => this.checkScrollNeeded(), 50);
+  }
+
+  // Configurar observadores para detectar cambios
+  private setupObservers(): void {
+    // Observer para cambios de tamaño
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.checkScrollNeeded();
+      });
+      
+      const homeContainer = document.querySelector('.home-container');
+      if (homeContainer) {
+        this.resizeObserver.observe(homeContainer);
+      }
+      
+      // Observar también el body para cambios generales
+      this.resizeObserver.observe(document.body);
     }
     
-    this.cargarGasolineras();
+    // Observer para cambios en el DOM (acordeones que se abren/cierran)
+    this.mutationObserver = new MutationObserver(() => {
+      this.checkScrollNeeded();
+    });
+    
+    const homeContainer = document.querySelector('.home-container');
+    if (homeContainer) {
+      this.mutationObserver.observe(homeContainer, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+      });
+    }
+    
+    // También escuchar eventos de scroll y resize
+    window.addEventListener('resize', () => this.checkScrollNeeded());
+    window.addEventListener('scroll', () => this.checkScrollNeeded());
+  }
+
+  // Verificar si se necesita el botón de scroll
+  checkScrollNeeded(): void {
+    const windowHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    
+    // Mostrar el botón SIEMPRE que la altura del documento sea mayor que la altura de la ventana
+    // Agregamos un pequeño margen (50px) para evitar falsos positivos
+    const tieneScrollPosible = documentHeight > windowHeight + 50;
+    
+    this.mostrarBotonScrollTop = tieneScrollPosible;
+  }
+
+  // Hacer scroll al inicio de la página
+  scrollToTop(): void {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
+
+  ngOnDestroy(): void {
+    // Limpiar observadores y event listeners
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+    }
+    
+    if (this.mutationObserver) {
+      this.mutationObserver.disconnect();
+    }
+    
+    window.removeEventListener('resize', () => this.checkScrollNeeded());
+    window.removeEventListener('scroll', () => this.checkScrollNeeded());
+  }
+
+  // ✅ Cambia el modo desde los botones
+  setModo(modo: 'buscar' | 'ruta'): void {
+    if (this.modoSeleccionado === modo) return;
+
+    this.modoSeleccionado = modo;
+
+    // Si cambia a ruta, reinicia destino
+    if (modo === 'ruta') {
+      this.destino = { calle: '', numero: '', ciudad: '', provincia: '' };
+    }
+
+    // Si vuelve a buscar, opcionalmente podrías cerrar destino
+    if (modo === 'buscar') {
+      this.acordeonAbierto.destino = false;
+    }
+    
+    // Verificar scroll después de cambiar modo
+    setTimeout(() => this.checkScrollNeeded(), 100);
+  }
+
+  toggleAcordeon(seccion: keyof typeof this.acordeonAbierto): void {
+    this.acordeonAbierto[seccion] = !this.acordeonAbierto[seccion];
+    
+    // Después de abrir/cerrar un acordeón, verificar scroll
+    setTimeout(() => this.checkScrollNeeded(), 350); // 350ms para dar tiempo a la animación
   }
 
   obtenerUbicacion(): void {
@@ -96,48 +230,75 @@ export class Home implements OnInit {
           provincia: nuevaUbicacion.provincia || '',
           direccionCompleta: nuevaUbicacion.direccionCompleta || ''
         };
-        
+
         this.storageService.guardarUbicacion(this.ubicacionUsuario);
-        this.cargarGasolineras();
       })
       .catch((error) => {
         alert(`Error obteniendo ubicación: ${error.message}`);
       });
   }
 
-  // Método para analizar la zona
-  analizarZona(): void {
-    console.log('=== ANÁLISIS DE ZONA ===');
-    
-    if (!this.gasolineras.length) {
-      console.log('No hay gasolineras cargadas');
-      alert('Primero debes cargar las gasolineras');
+  // ✅ BOTÓN DE BÚSQUEDA PRINCIPAL - 
+  ejecutarBusqueda(): void {
+    // Validar datos básicos
+    if (!this.ubicacionUsuario.ciudad && !this.ubicacionUsuario.calle) {
+      alert('Por favor, ingresa una ubicación de inicio');
       return;
     }
     
-    const estadisticas = this.gasolineraService.obtenerEstadisticasZona(
-      this.gasolineras,
-      this.ubicacionUsuario,
-      50 // radio de 50km
-    );
+    if (this.modoSeleccionado === 'ruta' && !this.destino.ciudad && !this.destino.calle) {
+      alert('En modo ruta, ingresa una ubicación de destino');
+      return;
+    }
     
-    // Mostrar alerta informativa
-    alert(`📊 Estadísticas en 50km:\n` +
-      `Total: ${estadisticas.total} gasolineras\n` +
-      `Gasolina 95: ${estadisticas.conGasolina95}\n` +
-      `Gasolina 98: ${estadisticas.conGasolina98}\n` +
-      `Diésel: ${estadisticas.conDiesel}\n` +
-      `Diésel Premium: ${estadisticas.conDieselPremium}\n` +
-      `GLP: ${estadisticas.conGLP}\n\n` +
-      `📍 Ubicación actual:\n` +
-      `Lat: ${this.ubicacionUsuario.latitud.toFixed(4)}\n` +
-      `Lon: ${this.ubicacionUsuario.longitud.toFixed(4)}`);
+    if (this.gasolineras.length === 0) {
+      alert('No hay gasolineras disponibles. Intenta recargar la página.');
+      return;
+    }
+
+    // Iniciar búsqueda
+    this.busquedaEnCurso = true;
+    this.error = null;
+    
+    // Aplicar los filtros temporales a los filtros reales
+    this.filters = { ...this.filtersTemporales };
+    
+    // Aplicar filtros con los datos actuales
+    this.aplicarFilters();
+    
+    // Marcar que se ha hecho una búsqueda
+    this.mostrarResultados = true;
+    
+    // Abrir el acordeón de resultados si hay resultados
+    if (this.gasolinerasFiltradas.length > 0) {
+      this.acordeonAbierto.resultados = true;
+      
+      // Scroll suave a la sección de resultados después de un breve delay
+      setTimeout(() => {
+        const elementoResultados = document.getElementById('resultados-container');
+        if (elementoResultados) {
+          elementoResultados.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          });
+        }
+      }, 300);
+    }
+    
+    // Finalizar carga
+    this.busquedaEnCurso = false;
+    
+    // Guardar filtros
+    this.storageService.guardarFiltros(this.filters);
+    
+    // Después de la búsqueda, verificar scroll
+    setTimeout(() => this.checkScrollNeeded(), 500);
   }
 
   cargarGasolineras(): void {
     this.cargando = true;
     this.error = null;
-    
+
     this.gasolineraService.getGasolineras().subscribe({
       next: (data) => {
         if (data.length === 0) {
@@ -147,259 +308,108 @@ export class Home implements OnInit {
         }
         this.gasolineras = data;
         this.extraerEmpresasUnicas();
-        this.aplicarFilters();
+        // NO aplicar filtros automáticamente aquí
         this.cargando = false;
+        
+        // Después de cargar gasolineras, verificar scroll
+        setTimeout(() => this.checkScrollNeeded(), 300);
       },
-      error: (error) => {
+      error: () => {
         this.error = 'Error al cargar gasolineras. La API podría no estar disponible.';
         this.cargando = false;
       },
     });
   }
 
-
-depurarFiltroAbiertas(): void {
-  if (!this.gasolineras.length) {
-    console.log('No hay gasolineras cargadas');
-    alert('Primero carga las gasolineras');
-    return;
-  }
-  
-  console.log('=== DEPURACIÓN FILTRO "SOLO ABIERTAS" ===');
-  console.log(`Filtro activado: ${this.filters.onlyOpen ? 'SÍ' : 'NO'}`);
-  
-  // Contar gasolineras por tipo de horario
-  const conteoHorarios = {
-    con24h: 0,
-    conCerrado: 0,
-    sinHorario: 0,
-    otros: 0
-  };
-  
-  const ejemplosOtros: string[] = [];
-  
-  // Analizar horarios de todas las gasolineras
-  this.gasolineras.forEach((g, index) => {
-    const horario = g.horario || '';
-    const horarioLower = horario.toLowerCase();
-    
-    if (horario === '') {
-      conteoHorarios.sinHorario++;
-    } else if (horarioLower.includes('24h') || horarioLower.includes('24 horas')) {
-      conteoHorarios.con24h++;
-    } else if (horarioLower.includes('cerrado') || horarioLower.includes('cl.')) {
-      conteoHorarios.conCerrado++;
-    } else {
-      conteoHorarios.otros++;
-      
-      // Guardar algunos ejemplos de otros horarios
-      if (ejemplosOtros.length < 5) {
-        ejemplosOtros.push(horario);
-      }
-    }
-  });
-  
-  console.log('📊 Estadísticas de horarios:');
-  console.log(`  Con "24h": ${conteoHorarios.con24h}`);
-  console.log(`  Con "cerrado" o "cl.": ${conteoHorarios.conCerrado}`);
-  console.log(`  Sin horario: ${conteoHorarios.sinHorario}`);
-  console.log(`  Otros formatos: ${conteoHorarios.otros}`);
-  
-  if (ejemplosOtros.length > 0) {
-    console.log('🔍 Ejemplos de otros horarios:');
-    ejemplosOtros.forEach((horario, i) => {
-      console.log(`  ${i+1}. "${horario}"`);
-    });
-  }
-  
-  // Probar el filtro actual
-  const filtradas = this.gasolineras.filter(g => {
-    const horario = g.horario?.toLowerCase() || '';
-    return !(horario.includes('cerrado') && !horario.includes('24h'));
-  });
-  
-  console.log(`🔧 Con filtro activado: ${filtradas.length} de ${this.gasolineras.length} gasolineras`);
-  
-  // Mostrar algunas gasolineras filtradas y no filtradas
-  console.log('🔍 Ejemplos (primeras 5):');
-  for (let i = 0; i < Math.min(5, this.gasolineras.length); i++) {
-    const g = this.gasolineras[i];
-    const horario = g.horario || '';
-    const pasaFiltro = !(horario.toLowerCase().includes('cerrado') && !horario.toLowerCase().includes('24h'));
-    
-    console.log(`  ${i+1}. ${g.rotulo} - Horario: "${horario}" - ${pasaFiltro ? '✅ PASA' : '❌ FILTRADA'}`);
-  }
-  
-  alert(`📊 Estadísticas de horarios:\n` +
-    `• Con "24h": ${conteoHorarios.con24h}\n` +
-    `• Con "cerrado": ${conteoHorarios.conCerrado}\n` +
-    `• Sin horario: ${conteoHorarios.sinHorario}\n` +
-    `• Otros: ${conteoHorarios.otros}\n\n` +
-    `Con filtro activado: ${filtradas.length} de ${this.gasolineras.length} gasolineras`);
-}
-
-// Método para exportar datos a la consola
-exportarDatosParaDepuracion(): void {
-  console.log('=== DATOS PARA DEPURACIÓN ===');
-  console.log('Gasolineras disponibles:', this.gasolineras.length);
-  console.log('Gasolineras filtradas:', this.gasolinerasFiltradas.length);
-  
-  // Crear un objeto con los datos relevantes
-  const datos = {
-    filtros: this.filters,
-    ubicacion: this.ubicacionUsuario,
-    empresasDisponibles: this.empresasDisponibles.slice(0, 10),
-    ejemploGasolineras: this.gasolineras.slice(0, 5).map(g => ({
-      rotulo: g.rotulo,
-      horario: g.horario,
-      precioGasolina95: g.precioGasolina95
-    }))
-  };
-  
-  console.log('Datos de depuración:', datos);
-  
-  // También guardar en window para acceder desde consola
-  (window as any).depuracionGasolineras = {
-    gasolineras: this.gasolineras,
-    filtradas: this.gasolinerasFiltradas,
-    filtros: this.filters
-  };
-  
-  console.log('💡 Accede desde consola con: depuracionGasolineras');
-  alert('Datos exportados a la consola. Usa "depuracionGasolineras" para acceder.');
-}
-
-
   extraerEmpresasUnicas(): void {
-    // Usar el normalizador para extraer empresas normalizadas
     const empresas = this.gasolineras
       .map((g) => {
-        // Intentar normalizar el nombre de la empresa
         const empresaNormalizada = this.companyNormalizer.normalizeCompanyName(g.rotulo);
-        return empresaNormalizada || g.rotulo; // Usar el normalizado o el nombre original
+        return empresaNormalizada || g.rotulo;
       })
       .filter((empresa, index, self) => empresa && self.indexOf(empresa) === index)
       .sort();
-    
+
     this.empresasDisponibles = empresas;
-    
-    console.log(`📊 ${empresas.length} empresas únicas encontradas (normalizadas)`);
-    console.log('Empresas disponibles:', empresas.slice(0, 20)); // Mostrar primeras 20
   }
 
   aplicarFilters(): void {
     if (!this.gasolineras.length) return;
-    
-    console.log('🔄 Aplicando filtros:', this.filters);
-    
+
+    // Aplicar filtros a las gasolineras
     this.gasolinerasFiltradas = this.gasolineraService.filtrarGasolineras(
       this.gasolineras,
       this.filters,
       this.ubicacionUsuario
     );
-    
-    console.log(`✅ ${this.gasolinerasFiltradas.length} gasolineras después de filtros`);
-    
-    // Aplicar ordenamiento local
+
+    // Ordenar según el criterio seleccionado
     this.ordenarGasolineras();
     
-    this.storageService.guardarFiltros(this.filters);
+    // Verificar scroll después de aplicar filtros
+    setTimeout(() => this.checkScrollNeeded(), 100);
   }
 
   ordenarGasolineras(): void {
+    // Calcular distancias para todas las gasolineras filtradas
+    this.gasolinerasFiltradas.forEach(gasolinera => {
+      gasolinera.distanceKm = this.gasolineraService.calcularDistancia(
+        this.ubicacionUsuario.latitud,
+        this.ubicacionUsuario.longitud,
+        gasolinera.latitud,
+        gasolinera.longitud
+      );
+    });
+
+    // Ordenar según el criterio seleccionado
     if (this.filters.sortBy === 'distance') {
-      this.gasolinerasFiltradas.sort((a, b) => {
-        const distA = this.gasolineraService.calcularDistancia(
-          this.ubicacionUsuario.latitud,
-          this.ubicacionUsuario.longitud,
-          a.latitud,
-          a.longitud
-        );
-        const distB = this.gasolineraService.calcularDistancia(
-          this.ubicacionUsuario.latitud,
-          this.ubicacionUsuario.longitud,
-          b.latitud,
-          b.longitud
-        );
-        return distA - distB;
-      });
+      this.gasolinerasFiltradas.sort((a, b) => (a.distanceKm || 999) - (b.distanceKm || 999));
     } else if (this.filters.sortBy === 'price') {
       this.gasolinerasFiltradas.sort((a, b) => {
         const precioA = this.obtenerPrecioRelevante(a);
         const precioB = this.obtenerPrecioRelevante(b);
-        
-        // Manejar precios no disponibles (0)
+
         if (precioA === 0 && precioB === 0) return 0;
         if (precioA === 0) return 1;
         if (precioB === 0) return -1;
-        
+
         return precioA - precioB;
       });
     }
   }
 
   obtenerPrecioRelevante(gasolinera: Gasolinera): number {
-    if (this.filters.fuelType === 'all') {
-      // Para "todos los combustibles", devolver el precio más bajo disponible
-      const preciosDisponibles = [];
-      
-      if (gasolinera.precioGasolina95 > 0) preciosDisponibles.push(gasolinera.precioGasolina95);
-      if (gasolinera.precioGasolina98 > 0) preciosDisponibles.push(gasolinera.precioGasolina98);
-      if (gasolinera.precioDiesel > 0) preciosDisponibles.push(gasolinera.precioDiesel);
-      if (gasolinera.precioDieselPremium > 0) preciosDisponibles.push(gasolinera.precioDieselPremium);
-      if (gasolinera.precioGLP > 0) preciosDisponibles.push(gasolinera.precioGLP);
-      
-      if (preciosDisponibles.length === 0) return 0;
-      
-      return Math.min(...preciosDisponibles);
-    }
-    
-    // Para un tipo específico de combustible
     switch (this.filters.fuelType) {
-      case 'Gasolina 95 E5': 
-        return gasolinera.precioGasolina95;
-      case 'Gasolina 98 E5': 
-        return gasolinera.precioGasolina98;
-      case 'Gasóleo A': 
-        return gasolinera.precioDiesel;
-      case 'Gasóleo Premium': 
-        return gasolinera.precioDieselPremium;
-      case 'GLP': 
-        return gasolinera.precioGLP;
-      default: 
-        return 0;
+      case 'Gasolina 95 E5': return gasolinera.precioGasolina95;
+      case 'Gasolina 98 E5': return gasolinera.precioGasolina98;
+      case 'Gasóleo A': return gasolinera.precioDiesel;
+      case 'Gasóleo Premium': return gasolinera.precioDieselPremium;
+      case 'GLP': return gasolinera.precioGLP;
+      default: return gasolinera.precioGasolina95;
     }
   }
 
+  // Cuando el usuario modifica los filtros, solo se guardan temporalmente
   onFiltersCambiados(nuevosFilters: Filters): void {
-    this.filters = nuevosFilters;
-    this.aplicarFilters();
-  }
-
-  onUbicacionCambiada(nuevaUbicacion: Ubicacion): void {
-    this.ubicacionUsuario = nuevaUbicacion;
-    this.storageService.guardarUbicacion(nuevaUbicacion);
-    this.aplicarFilters();
+    this.filtersTemporales = nuevosFilters;
+    // NO aplicar filtros aquí, solo se aplicarán cuando el usuario pulse "Buscar"
   }
 
   onGasolineraSeleccionada(gasolinera: Gasolinera): void {
     this.gasolineraSeleccionada = gasolinera;
+    this.acordeonAbierto.detalles = true;
+    setTimeout(() => this.checkScrollNeeded(), 100);
   }
 
-  toggleModoSeleccionado(modo: 'buscar' | 'ruta'): void {
-    this.modoSeleccionado = modo;
-    if (modo === 'ruta') {
-      this.destino = { calle: '', numero: '', ciudad: '', provincia: '' };
-    }
-  }
+  restablecerTodo(): void {
+    // Cerrar todos los acordeones
+    Object.keys(this.acordeonAbierto).forEach(key => {
+      this.acordeonAbierto[key as keyof typeof this.acordeonAbierto] = false;
+    });
 
-  onModoCambiado(): void {
-    this.toggleModoSeleccionado(this.modoSeleccionado);
-  }
-
-  restablecerFiltros(): void {
+    // Restablecer filtros (tanto los reales como los temporales)
     this.filters = {
-      fuelType: 'all',
+      fuelType: 'Gasolina 95 E5',
       companies: [],
       maxPrice: 0,
       maxDistance: 50,
@@ -407,21 +417,57 @@ exportarDatosParaDepuracion(): void {
       sortBy: 'distance',
       companyMode: 'include'
     };
-    this.aplicarFilters();
+    
+    this.filtersTemporales = { ...this.filters };
+
+    // Restablecer ubicación
+    this.ubicacionUsuario = {
+      latitud: 0,
+      longitud: 0,
+      calle: '',
+      numero: '',
+      ciudad: '',
+      provincia: '',
+      direccionCompleta: ''
+    };
+
+    // Restablecer modo
+    this.setModo('buscar');
+
+    // Restablecer destino
+    this.destino = { calle: '', numero: '', ciudad: '', provincia: '' };
+    
+    // Limpiar resultados
+    this.gasolineraSeleccionada = null;
+    this.error = null;
+    this.mostrarResultados = false;
+    this.gasolinerasFiltradas = [];
+
+    // Guardar en storage
+    this.storageService.guardarUbicacion(this.ubicacionUsuario);
+    this.storageService.guardarFiltros(this.filters);
+    
+    // Recargar gasolineras
+    this.cargarGasolineras();
   }
 
-getUbicacionFormateada(): string {
-  if (this.ubicacionUsuario.ciudad && this.ubicacionUsuario.provincia) {
-    return `${this.ubicacionUsuario.ciudad}, ${this.ubicacionUsuario.provincia}`;
-  } else if (this.ubicacionUsuario.ciudad) {
-    return this.ubicacionUsuario.ciudad;
-  } else {
-    return 'Ubicación no especificada';
+  restablecerFiltros(): void {
+    // Restablecer filtros temporales
+    this.filtersTemporales = {
+      fuelType: 'Gasolina 95 E5',
+      companies: [],
+      maxPrice: 0,
+      maxDistance: 50,
+      onlyOpen: false,
+      sortBy: 'distance',
+      companyMode: 'include'
+    };
+    
+    // Si ya había resultados, también restablecer los filtros reales
+    if (this.mostrarResultados) {
+      this.filters = { ...this.filtersTemporales };
+      this.aplicarFilters();
+      this.storageService.guardarFiltros(this.filters);
+    }
   }
-}
-
-getRadioBusqueda(): number {
-  return this.filters.maxDistance;
-}
-
 }

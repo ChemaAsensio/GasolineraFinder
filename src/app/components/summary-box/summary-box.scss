@@ -1,202 +1,274 @@
+/* summary-box.scss */
 .summary-box {
-  background-color: #f8f9fa;
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 25px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
 }
 
 .summary-section {
   margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 25px;
+  border-bottom: 1px solid var(--border-color);
   
   &:last-child {
-    border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
+    border-bottom: none;
   }
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--accent-orange);
   margin-bottom: 15px;
-  padding-left: 10px;
-  border-left: 4px solid #3498db;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .info-row {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-
-.info-label {
-  font-weight: 500;
-  color: #34495e;
-  margin-right: 10px;
-  min-width: 180px;
-}
-
-.info-value {
-  color: #2c3e50;
-  font-weight: 400;
-}
-
-.config-row {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.config-group {
-  flex: 1;
-  min-width: 250px;
-}
-
-.custom-select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background-color: white;
-  font-size: 14px;
-  color: #333;
-  min-width: 200px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 148, 77, 0.1);
   
-  &:focus {
-    outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-  }
-}
-
-.gasolineras-table-container {
-  overflow-x: auto;
-  margin: 15px 0;
-}
-
-.gasolineras-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  background-color: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.gasolineras-table th {
-  background-color: #2c3e50;
-  color: white;
-  font-weight: 600;
-  padding: 12px 15px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.gasolineras-table td {
-  padding: 12px 15px;
-  border-bottom: 1px solid #eee;
-  vertical-align: middle;
-}
-
-.gasolineras-table tr:hover {
-  background-color: #f5f7fa;
-}
-
-.gasolineras-table tr.destacada {
-  background-color: #e8f4fc;
-  font-weight: 600;
-}
-
-.gasolineras-table tr.destacada:hover {
-  background-color: #d4e9f8;
-}
-
-.col-posicion {
-  font-weight: 600;
-  color: #3498db;
-  text-align: center;
-  width: 50px;
-}
-
-.col-gasolinera {
-  min-width: 150px;
-}
-
-.col-precio {
-  font-weight: 600;
-  color: #27ae60;
-  min-width: 100px;
-}
-
-.col-distancia {
-  color: #7f8c8d;
-  min-width: 80px;
-}
-
-.col-direccion {
-  min-width: 200px;
-  max-width: 250px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.col-horario {
-  min-width: 120px;
-}
-
-.col-valoracion {
-  color: #f39c12;
-  min-width: 100px;
-}
-
-.no-results {
-  text-align: center;
-  padding: 30px;
-  color: #7f8c8d;
-  background-color: white;
-  border-radius: 8px;
-  border: 2px dashed #ddd;
-}
-
-.results-info {
-  margin-top: 15px;
-  font-style: italic;
-  color: #7f8c8d;
-  text-align: center;
-  font-size: 14px;
-}
-
-@media (max-width: 768px) {
-  .config-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .config-group {
-    min-width: 100%;
-  }
-  
-  .info-row {
-    flex-direction: column;
-    align-items: flex-start;
+  &:last-child {
+    border-bottom: none;
   }
   
   .info-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  
+  .info-value {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 15px;
+  }
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-item {
+  text-align: center;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  
+  &:hover {
+    border-color: var(--accent-orange);
+    transform: translateY(-3px);
+  }
+  
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent-orange);
     margin-bottom: 5px;
   }
   
-  .gasolineras-table {
-    font-size: 12px;
+  .stat-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+}
+
+/* TOP 3 RECOMENDADAS - ACTUALIZADO */
+.top-stations {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.top-station {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 18px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  
+  &:hover {
+    border-color: var(--accent-orange);
+    transform: translateX(5px);
   }
   
-  .gasolineras-table th,
-  .gasolineras-table td {
-    padding: 8px 10px;
+  &.highlighted {
+    background: linear-gradient(90deg, rgba(255, 148, 77, 0.1), rgba(255, 148, 77, 0.05));
+    border-color: var(--accent-orange);
+  }
+}
+
+.station-rank {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-orange);
+  color: white;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.station-info {
+  flex: 1;
+  
+  strong {
+    display: block;
+    font-size: 16px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+}
+
+/* NUEVO DISEÑO CON DISTANCIA CENTRADA */
+.station-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  
+  .price {
+    font-weight: 700;
+    color: var(--accent-orange);
+    font-size: 16px;
+    flex: 0 0 auto;
+    text-align: left;
+    min-width: 90px;
+  }
+  
+  .distance {
+    color: var(--text-secondary);
+    font-size: 14px;
+    background: rgba(255, 148, 77, 0.1);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 600;
+    margin: 0 auto; /* CENTRADO AUTOMÁTICO */
+  }
+  
+  .schedule {
+    color: var(--text-muted);
+    font-size: 13px;
+    flex: 0 0 auto;
+    text-align: right;
+    min-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.results-info {
+  text-align: center;
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+  
+  p {
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .summary-box {
+    padding: 20px;
+  }
+  
+  /* Ajustes para tablet */
+  .station-details {
+    flex-wrap: wrap;
+    gap: 12px;
+    
+    .price {
+      flex: 1;
+      min-width: auto;
+    }
+    
+    .distance {
+      flex: 0 0 auto;
+      margin: 0;
+    }
+    
+    .schedule {
+      flex: 1;
+      text-align: right;
+      min-width: auto;
+    }
+  }
+}
+
+/* Ajustes para móvil */
+@media (max-width: 480px) {
+  .top-station {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .station-rank {
+    align-self: flex-start;
+  }
+  
+  .station-info {
+    width: 100%;
+  }
+  
+  .station-details {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    
+    .price {
+      text-align: center;
+      font-size: 18px;
+      order: 1;
+    }
+    
+    .distance {
+      text-align: center;
+      margin: 5px 0;
+      order: 2;
+    }
+    
+    .schedule {
+      text-align: center;
+      font-size: 12px;
+      padding: 8px;
+      background: rgba(255, 148, 77, 0.05);
+      border-radius: var(--radius-sm);
+      order: 3;
+    }
   }
 }

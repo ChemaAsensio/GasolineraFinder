@@ -1,166 +1,198 @@
-// src/styles.scss - VERSIÓN SIMPLIFICADA
-/* Importa Bootstrap */
-@use 'bootstrap/scss/bootstrap' as *;
+/* styles.scss */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap');
 
-/* Importa Leaflet CSS */
-@import 'leaflet/dist/leaflet.css';
+:root {
+  
+  --bg-primary: #050816;
+  --bg-secondary: #161616;
+  --bg-card: #1b1b1b;
+  
+  --text-primary: #f4f4f4;
+  --text-secondary: #cccccc;
+  --text-muted: #999999;
+  
+  --accent-orange: #ff944d;
+  --accent-orange-dark: #e67e22;
+  --accent-orange-darker: #b5532d;
+  
+  --border-color: #242424;
+  --border-light: #2a2a2a;
+  
+  /* Utilidades */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+  
+  --transition: all 0.25s ease;
+}
 
-/* Estilos básicos para tu app */
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+/* Reset y estilos globales */
+* {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  background-color: #f5f5f5;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+html, body {
+  height: 100%;
 }
 
-.card {
-  margin-bottom: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+body {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.card-header {
-  padding: 15px;
-  font-weight: bold;
-  background-color: #007bff;
-  color: white;
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 10px;
 }
 
-.card-body {
-  padding: 20px;
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
 }
 
-.btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
+::-webkit-scrollbar-thumb {
+  background: var(--accent-orange);
+  border-radius: var(--radius-md);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-orange-dark);
+}
+
+/* Enlaces */
+a {
+  color: var(--accent-orange);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+a:hover {
+  color: var(--text-primary);
+}
+
+/* Botones base */
+button {
+  font-family: 'Manrope', sans-serif;
   cursor: pointer;
-  font-weight: 500;
+  transition: var(--transition);
 }
 
-.btn-outline-primary {
-  background: white;
-  border: 1px solid #007bff;
-  color: #007bff;
+/* Inputs */
+input, select, textarea {
+  font-family: 'Manrope', sans-serif;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  transition: var(--transition);
 }
 
-.btn-outline-primary:hover {
-  background: #007bff;
-  color: white;
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 2px rgba(255, 148, 77, 0.2);
 }
 
+/* Utilidades */
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-accent {
+  color: var(--accent-orange);
+}
+
+.bg-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+}
+
+.shadow-card {
+  box-shadow: var(--shadow-md);
+}
+
+
+/* ===== OVERRIDES BOOTSTRAP (tema oscuro) ===== */
+
+/* Fondo y texto base */
+body {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Contenedores típicos bootstrap */
+.container,
+.container-fluid,
+.card,
+.card-body,
+.card-header,
+.modal-content,
+.dropdown-menu {
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Inputs/selects bootstrap */
+.form-control,
+.form-select,
+.form-check-input,
+.input-group-text {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.form-control::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Focus */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--accent-orange) !important;
+  box-shadow: 0 0 0 2px rgba(255, 148, 77, 0.2) !important;
+}
+
+/* Labels */
+label,
+.form-label {
+  color: var(--text-secondary) !important;
+}
+
+/* Checkboxes */
+.form-check-input:checked {
+  background-color: var(--accent-orange) !important;
+  border-color: var(--accent-orange) !important;
+}
+
+/* Botones bootstrap (por si usas btn) */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-orange-dark)) !important;
+  border: none !important;
+}
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
 .btn-outline-secondary {
-  background: white;
-  border: 1px solid #6c757d;
-  color: #6c757d;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-light) !important;
 }
-
 .btn-outline-secondary:hover {
-  background: #6c757d;
-  color: white;
-}
-
-.alert {
-  padding: 15px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-}
-
-.alert-info {
-  background: #d1ecf1;
-  border: 1px solid #bee5eb;
-  color: #0c5460;
-}
-
-.alert-danger {
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
-  color: #721c24;
-}
-
-.badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* Estilos específicos para home */
-.home-container {
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.loading {
-  padding: 20px;
-  text-align: center;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  margin: 20px 0;
-  color: #6c757d;
-}
-
-.error {
-  padding: 20px;
-  background-color: #dc3545;
-  color: white;
-  border-radius: 8px;
-  margin: 20px 0;
-  
-  button {
-    margin-top: 10px;
-    background-color: white;
-    color: #dc3545;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-    
-    &:hover {
-      background-color: #f8f9fa;
-    }
-  }
-}
-
-.location-info {
-  background-color: #e9ecef;
-  padding: 15px;
-  border-radius: 8px;
-  margin: 20px 0;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  flex-wrap: wrap;
-  
-  strong {
-    color: #495057;
-  }
-  
-  span {
-    color: #212529;
-  }
-  
-  button {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-    
-    &:hover {
-      background-color: #0056b3;
-    }
-  }
+  background: rgba(255, 148, 77, 0.12) !important;
+  border-color: var(--accent-orange) !important;
+  color: var(--text-primary) !important;
 }
