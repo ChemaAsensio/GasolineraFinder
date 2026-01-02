@@ -196,3 +196,134 @@ label,
   border-color: var(--accent-orange) !important;
   color: var(--text-primary) !important;
 }
+
+/* ===== HEADER ===== */
+.main-header {
+  background: rgba(27, 27, 27, 0.95);
+  border-bottom: 1px solid rgba(255, 148, 77, 0.15);
+  padding: 0.75rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.header-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.brand-logo {
+  height: 65px;
+  width: auto;
+  filter: drop-shadow(0 6px 14px rgba(255, 148, 77, 0.35));
+  transition: transform 0.3s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+.brand-text {
+  font-size: 1.8rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-orange-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: none; /* Oculta el texto si solo quieres el logo */
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-button {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+  position: relative;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 16px;
+    right: 16px;
+    height: 2px;
+    background: var(--accent-orange);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+  }
+}
+
+.nav-button:hover {
+  color: var(--text-primary);
+  background: rgba(255, 148, 77, 0.08);
+  
+  &::after {
+    transform: scaleX(1);
+  }
+}
+
+.nav-button.active {
+  color: var(--accent-orange);
+  background: rgba(255, 148, 77, 0.12);
+  border: 1px solid rgba(255, 148, 77, 0.18);
+  
+  &::after {
+    transform: scaleX(1);
+  }
+}
+
+/* ===== ESPACIO PARA EL CONTENIDO ===== */
+router-outlet + * {
+  display: block;
+  min-height: calc(100vh - 80px); /* Ajusta según la altura real del header */
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .main-header {
+    padding: 0.5rem 0;
+  }
+  
+  .header-container {
+    padding: 0 1rem;
+  }
+  
+  .brand-logo {
+    height: 50px;
+  }
+  
+  .main-nav {
+    gap: 12px;
+  }
+  
+  .nav-button {
+    font-size: 14px;
+    padding: 8px 12px;
+    
+    &::after {
+      left: 12px;
+      right: 12px;
+    }
+  }
+}

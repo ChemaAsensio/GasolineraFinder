@@ -12,6 +12,7 @@ import { SummaryBoxComponent } from '../../components/summary-box/summary-box';
 import { StationList } from '../../components/station-list/station-list';
 import { Ubicacion } from '../../models/location';
 
+
 @Component({
   selector: 'app-home',
   standalone: true,
@@ -20,7 +21,7 @@ import { Ubicacion } from '../../models/location';
     FormsModule,
     FiltersComponent,
     SummaryBoxComponent,
-    StationList
+    StationList,
   ],
   templateUrl: './home.html',
   styleUrls: ['./home.scss'],
