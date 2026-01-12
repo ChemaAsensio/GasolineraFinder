@@ -8,8 +8,101 @@
   padding: 30px 20px;
   min-height: 100vh;
   background: var(--bg-primary);
-  padding-top: 140px
+  padding-top: 20px; 
 }
+
+/* =========================================================
+  Datos de perfil
+========================================================= */
+
+
+
+/* =========================================================
+   CARD PERFIL (mismo look que acordeones)
+========================================================= */
+
+.perfil-card {
+  margin: 18px 0 22px;
+  padding: 22px 22px;
+
+  background: var(--bg-card); 
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* Layout interno */
+.perfil-container {
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  gap: 28px;
+  align-items: center;
+}
+
+/* Texto */
+.datos-perfil {
+  font-size: 18px;
+}
+
+.datos-perfil h2 {
+  margin: 0 0 14px;
+  color: var(--accent-orange);
+  font-weight: 900;
+}
+
+/* separación entre líneas */
+.datos-perfil p {
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+
+/* Etiqueta en negrita */
+.datos-perfil strong {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+/* Valor SIN negrita (lo que quieres) */
+.datos-perfil span {
+  color: var(--text-primary);
+  font-weight: 400; 
+  opacity: 0.95;    
+}
+
+/* Video */
+.gif-coche {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.gif-coche video {
+  width: min(520px, 100%);
+  height: auto;
+  background: transparent;
+  border-radius: 16px;
+  pointer-events: none;
+  filter: drop-shadow(0 14px 38px rgba(0, 0, 0, 0.35));
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .perfil-container {
+    grid-template-columns: 1fr;
+  }
+  .gif-coche {
+    justify-content: center;
+  }
+}
+
+
+
+
+
+
+
 
 /* =========================================================
    TOP BAR (logo izquierda + links derecha) - FIXED
@@ -21,11 +114,11 @@
   left: 0;
   right: 0;
   z-index: 1000;
-  
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  
+
   padding: 20px 5%;
   background: var(--bg-primary);
   border-bottom: 1px solid rgba(255, 148, 77, 0.15);
@@ -47,7 +140,7 @@
   display: block;
   filter: drop-shadow(0 6px 14px rgba(255, 148, 77, 0.35));
   transition: transform 0.3s ease;
-  
+
   &:hover {
     transform: scale(1.05);
   }
@@ -68,7 +161,7 @@
   border-radius: var(--radius-md);
   transition: var(--transition);
   position: relative;
-  
+
   &::after {
     content: '';
     position: absolute;
@@ -85,7 +178,7 @@
 .topnav a:hover {
   color: var(--text-primary);
   background: rgba(255, 148, 77, 0.08);
-  
+
   &::after {
     transform: scaleX(1);
   }
@@ -95,7 +188,7 @@
   color: var(--accent-orange);
   background: rgba(255, 148, 77, 0.12);
   border: 1px solid rgba(255, 148, 77, 0.18);
-  
+
   &::after {
     transform: scaleX(1);
   }
@@ -178,17 +271,17 @@
   gap: 15px;
   box-shadow: 0 8px 25px rgba(255, 148, 77, 0.25);
   min-width: 280px;
-  
+
   &:hover:not(:disabled) {
     transform: translateY(-4px) scale(1.03);
     box-shadow: 0 12px 35px rgba(255, 148, 77, 0.4);
     background: linear-gradient(135deg, var(--accent-orange-dark), #d35400);
   }
-  
+
   &:active:not(:disabled) {
     transform: translateY(-1px) scale(1.01);
   }
-  
+
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -214,7 +307,6 @@
   margin-left: 8px;
 }
 
-/* Indicador de carga en el botón */
 .btn-busqueda-principal.cargando {
   .btn-busqueda-icono {
     animation: spin 1s linear infinite;
@@ -252,12 +344,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  
+
   max-width: 400px;
   width: 100%;
   box-shadow: 0 4px 15px rgba(255, 148, 77, 0.25);
@@ -272,31 +364,10 @@
     transform: translateY(-1px);
     box-shadow: 0 4px 15px rgba(255, 148, 77, 0.25);
   }
-  
+
   &:focus {
     outline: 3px solid rgba(255, 148, 77, 0.3);
     outline-offset: 2px;
-  }
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .restablecer-container {
-    margin: 25px 0;
-  }
-  
-  .btn-restablecer-todo {
-    padding: 14px 25px;
-    font-size: 15px;
-    max-width: 350px;
-  }
-}
-
-@media (max-width: 480px) {
-  .btn-restablecer-todo {
-    padding: 13px 20px;
-    font-size: 15px;
-    max-width: 300px;
   }
 }
 
@@ -411,7 +482,7 @@
 }
 
 /* =========================================================
-   FORMULARIOS Y BOTONES
+   FORMULARIOS
 ========================================================= */
 
 .campo-direccion {
@@ -446,7 +517,7 @@
 }
 
 /* =========================================================
-   BOTÓN UBICACIÓN CENTRADO - CONTAINER CENTRADO
+   BOTÓN UBICACIÓN
 ========================================================= */
 
 .botones-accion-container {
@@ -454,18 +525,6 @@
   justify-content: center;
   margin-top: 25px;
 }
-
-.botones-accion {
-  display: inline-flex;
-  gap: 15px;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-/* =========================================================
-   BOTÓN UBICACIÓN ELEGANTE CENTRADO
-========================================================= */
 
 .btn-ubicacion-elegante {
   display: inline-flex;
@@ -484,35 +543,25 @@
   position: relative;
   overflow: hidden;
   box-shadow: 0 6px 20px rgba(255, 148, 77, 0.15);
-  
+
   &:hover {
     background: linear-gradient(135deg, rgba(255, 148, 77, 0.2), rgba(255, 148, 77, 0.12));
     border-color: var(--accent-orange);
     transform: translateY(-3px) scale(1.03);
     box-shadow: 0 10px 30px rgba(255, 148, 77, 0.25);
-    
+
     .btn-ubicacion-icono {
       transform: scale(1.2) rotate(15deg);
     }
   }
-  
+
   &:active {
     transform: translateY(-1px) scale(1.01);
   }
-  
+
   &:focus {
     outline: none;
     box-shadow: 0 0 0 4px rgba(255, 148, 77, 0.25);
-  }
-  
-  /* Indicador de carga/animation */
-  &.cargando {
-    opacity: 0.8;
-    cursor: wait;
-    
-    .btn-ubicacion-icono {
-      animation: pulse 1.5s infinite;
-    }
   }
 }
 
@@ -526,77 +575,6 @@
 .btn-ubicacion-texto {
   font-weight: 700;
   letter-spacing: 0.3px;
-}
-
-/* Botón Analizar (si lo mantienes) */
-.btn-accion.analizar {
-  padding: 14px 28px;
-  border-radius: var(--radius-lg);
-  border: none;
-  font-weight: 700;
-  font-size: 16px;
-  cursor: pointer;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: linear-gradient(135deg, #4caf50, #2e7d32);
-  color: white;
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.15);
-  
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(76, 175, 80, 0.25);
-  }
-}
-
-/* Versión con tooltip integrado */
-.btn-ubicacion-tooltip {
-  position: relative;
-  
-  &::before {
-    content: "📡 Detectando ubicación...";
-    position: absolute;
-    top: -50px;
-    left: 50%;
-    transform: translateX(-50%) translateY(10px);
-    background: var(--bg-card);
-    color: var(--text-primary);
-    padding: 10px 16px;
-    border-radius: var(--radius-md);
-    font-size: 14px;
-    font-weight: 500;
-    white-space: nowrap;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-lg);
-    pointer-events: none;
-    z-index: 10;
-  }
-  
-  &:hover::before {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-@keyframes pulse {
-  0% { 
-    opacity: 0.7;
-    transform: scale(1);
-  }
-  50% { 
-    opacity: 1;
-    transform: scale(1.1);
-  }
-  100% { 
-    opacity: 0.7;
-    transform: scale(1);
-  }
 }
 
 /* =========================================================
@@ -645,7 +623,7 @@
 }
 
 /* =========================================================
-   SCROLL TO TOP BUTTON 
+   SCROLL TO TOP BUTTON
 ========================================================= */
 
 .scroll-top-btn {
@@ -670,207 +648,150 @@
   opacity: 0;
   transform: translateY(20px) scale(0.9);
   pointer-events: none;
-  
+
   &.visible {
     opacity: 1;
     transform: translateY(0) scale(1);
     pointer-events: all;
   }
-  
+
   &:hover {
     background: linear-gradient(135deg, var(--accent-orange-dark), #d35400);
     transform: translateY(-5px) scale(1.1);
     box-shadow: 0 10px 30px rgba(255, 148, 77, 0.6);
   }
-  
+
   &:active {
     transform: translateY(-2px) scale(1.05);
-  }
-  
-  // Animación de entrada más suave
-  animation: fadeInUpScale 0.4s ease-out;
-}
-
-@keyframes fadeInUpScale {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Botón scroll to top responsive */
-@media (max-width: 768px) {
-  .scroll-top-btn {
-    bottom: 20px;
-    right: 20px;
-    width: 45px;
-    height: 45px;
-    font-size: 20px;
-  }
-}
-
-@media (max-width: 480px) {
-  .scroll-top-btn {
-    bottom: 15px;
-    right: 15px;
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
   }
 }
 
 /* =========================================================
-   RESPONSIVE
+   ✅ NUEVO: Bloque “Datos del vehículo” (autonomía)
 ========================================================= */
 
-@media (max-width: 768px) {
-  .home-container {
-    padding: 15px 10px;
-    padding-top: 120px;
-  }
+.ruta-settings {
+  margin-bottom: 18px;
+  padding: 16px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 148, 77, 0.18);
+  background: rgba(255, 148, 77, 0.04);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+}
 
-  .topbar {
-    padding: 15px 4%;
-  }
+.ruta-settings-title {
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: 0.2px;
+}
 
-  .brand-logo {
-    height: 65px;
-  }
+.ruta-settings-grid {
+  margin-top: 6px;
+}
 
-  .topnav {
-    gap: 12px;
-  }
+.ruta-settings-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.95;
+}
 
-  .topnav a {
-    font-size: 14px;
-    padding: 8px 12px;
-    
-    &::after {
-      left: 12px;
-      right: 12px;
-    }
-  }
+/* =========================================================
+   ✅ NUEVO: Pintar routeInfo TOP3
+========================================================= */
 
-  .mode-switch {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 8px 0 18px;
-  }
+.ruta-top3-extra {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 148, 77, 0.18);
 
-  .mode-pill {
-    padding: 9px 12px;
-    font-size: 13px;
+  h4 {
+    margin: 0 0 12px;
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 800;
   }
+}
 
-  .campos-grid {
+.ruta-top3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ruta-top3-card {
+  background: rgba(22, 22, 22, 0.55);
+  border: 1px solid rgba(255, 148, 77, 0.16);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  display: flex;
+  gap: 12px;
+}
+
+.ruta-top3-rank {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-orange-dark));
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.ruta-top3-main {
+  min-width: 0;
+}
+
+.ruta-top3-name {
+  font-weight: 900;
+  color: var(--text-primary);
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.ruta-top3-addr {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.9;
+  margin-bottom: 10px;
+}
+
+.ruta-top3-metrics {
+  display: grid;
+  gap: 8px;
+}
+
+.metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.metric-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.metric.muted {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+/* Responsive TOP3 */
+@media (max-width: 900px) {
+  .ruta-top3-grid {
     grid-template-columns: 1fr;
-  }
-
-  .botones-accion-container {
-    margin-top: 20px;
-  }
-  
-  .botones-accion {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .btn-ubicacion-elegante {
-    padding: 12px 22px;
-    font-size: 15px;
-    
-    .btn-ubicacion-icono {
-      font-size: 20px;
-    }
-  }
-  
-  .btn-accion.analizar {
-    padding: 12px 22px;
-    font-size: 15px;
-  }
-  
-  .botones-busqueda-container {
-    margin: 25px 0;
-  }
-  
-  .btn-busqueda-principal {
-    padding: 16px 30px;
-    font-size: 17px;
-    min-width: 250px;
-  }
-  
-  /* Botón scroll to top responsive */
-  .scroll-top-btn {
-    bottom: 20px;
-    right: 20px;
-    width: 45px;
-    height: 45px;
-    font-size: 20px;
-  }
-  
-  /* En móviles muy pequeños */
-  @media (max-width: 480px) {
-    .home-container {
-      padding-top: 110px;
-    }
-    
-    .topbar {
-      flex-direction: column;
-      gap: 15px;
-      padding: 15px;
-    }
-    
-    .brand-logo {
-      height: 60px;
-    }
-    
-    .topnav {
-      width: 100%;
-      justify-content: center;
-    }
-    
-    .botones-accion {
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .btn-ubicacion-elegante {
-      width: 100%;
-      max-width: 280px;
-      justify-content: center;
-      padding: 14px 20px;
-      
-      .btn-ubicacion-icono {
-        font-size: 20px;
-      }
-    }
-    
-    .btn-accion.analizar {
-      width: 100%;
-      max-width: 280px;
-      justify-content: center;
-    }
-    
-    .btn-busqueda-principal {
-      width: 100%;
-      max-width: 280px;
-      padding: 15px 20px;
-      font-size: 16px;
-    }
-    
-    .scroll-top-btn {
-      bottom: 15px;
-      right: 15px;
-      width: 40px;
-      height: 40px;
-      font-size: 18px;
-    }
   }
 }

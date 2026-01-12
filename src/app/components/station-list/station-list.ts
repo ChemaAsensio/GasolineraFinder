@@ -10,7 +10,7 @@ import { Filters, TIPO_TO_FUEL_LABEL } from '../../models/filter';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './station-list.html',
-  styleUrl: './station-list.scss',
+  styleUrls: ['./station-list.scss'],  // Corregido aquí (styleUrls en vez de styleUrl)
 })
 export class StationList {
   @Input() stations: Gasolinera[] = [];

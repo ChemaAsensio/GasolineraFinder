@@ -4,6 +4,23 @@ import { Gasolinera } from '../../models/station';
 import { Filters } from '../../models/filter';
 import { GasolineraService } from '../../services/api/gasolinera';
 
+type ModoBusqueda = 'buscar' | 'ruta';
+
+type RutaRowVM = {
+  station: Gasolinera;
+  kmFromOrigin: number;   // 1 decimal en UI
+  precio: number;
+  desvioKm: number;       // 1 decimal en UI
+  desvioEur: number;      // 2 decimales en UI
+  horario: string;
+};
+
+type RutaBucketVM = {
+  fromKm: number;
+  toKm: number;
+  items: RutaRowVM[];
+};
+
 @Component({
   selector: 'app-summary-box',
   standalone: true,
@@ -13,16 +30,19 @@ import { GasolineraService } from '../../services/api/gasolinera';
 })
 export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
   @Input() stations: Gasolinera[] = [];
-  @Input() filters!: Filters;
-  @Input() ubicacionUsuario: any;
-  
+  @Input() filters: Filters | null = null;
+  @Input() ubicacionUsuario: any = null;
+
+  // ✅ NUEVO
+  @Input() modo: ModoBusqueda = 'buscar';
+
   fechaActual: string = '';
   horaActual: string = '';
   actualizadoHace: string = '0 segundos';
   private ultimaActualizacion: Date = new Date();
   private intervalHora: any;
   private intervalActualizado: any;
-  
+
   estadisticas = {
     total: 0,
     precioPromedio: 0,
@@ -32,27 +52,32 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
     masBarata: null as any
   };
 
+  // ✅ NUEVO: tabla por cubos (modo ruta)
+  rutasPorCubo: RutaBucketVM[] = [];
+
   constructor(private gasolineraService: GasolineraService) {}
 
   ngOnInit(): void {
     this.actualizarTiempo();
     this.actualizarTiempoTranscurrido();
-    
+
     this.intervalHora = setInterval(() => {
       this.actualizarTiempo();
     }, 1000);
-    
+
     this.intervalActualizado = setInterval(() => {
       this.actualizarTiempoTranscurrido();
     }, 30000);
-    
+
     this.calcularEstadisticas();
+    this.rebuildViewModels();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['stations'] || changes['filters']) {
+    if (changes['stations'] || changes['filters'] || changes['modo']) {
       this.calcularEstadisticas();
       this.ultimaActualizacion = new Date();
+      this.rebuildViewModels();
     }
   }
 
@@ -61,32 +86,158 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
     if (this.intervalActualizado) clearInterval(this.intervalActualizado);
   }
 
+  // =========================
+  // ✅ NUEVO: Construcción tabla ruta
+  // =========================
+  private rebuildViewModels(): void {
+    if (this.modo !== 'ruta') {
+      this.rutasPorCubo = [];
+      return;
+    }
+
+    const rows = (this.stations ?? [])
+      .map((s) => this.mapStationToRutaRow(s))
+      // descartar las que no tienen km válido
+      .filter(r => Number.isFinite(r.kmFromOrigin) && r.kmFromOrigin >= 0)
+      // ordenar por km desde origen (cercanas -> lejanas)
+      .sort((a, b) => a.kmFromOrigin - b.kmFromOrigin);
+
+    if (rows.length === 0) {
+      this.rutasPorCubo = [];
+      return;
+    }
+
+    const maxKm = rows[rows.length - 1].kmFromOrigin;
+    const intervalKm = this.inferIntervalKm(maxKm);
+
+    const bucketsMap = new Map<number, RutaBucketVM>();
+
+    for (const r of rows) {
+      const idx = Math.floor(r.kmFromOrigin / intervalKm);
+      const fromKm = idx * intervalKm;
+      const toKm = fromKm + intervalKm;
+
+      if (!bucketsMap.has(idx)) {
+        bucketsMap.set(idx, { fromKm, toKm, items: [] });
+      }
+      bucketsMap.get(idx)!.items.push(r);
+    }
+
+    // ordenar cubos por fromKm
+    const buckets = Array.from(bucketsMap.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([, v]) => v);
+
+    this.rutasPorCubo = buckets;
+  }
+
+  private inferIntervalKm(maxKm: number): number {
+    // Heurística simple para que haya ~7 cubos (similar a tu debug N=7),
+    // clamp para que no salgan cubos absurdos.
+    const raw = Math.round(maxKm / 7);
+    const clamped = Math.min(60, Math.max(15, raw)); // 15..60
+    // redondeo a múltiplos de 5 para que sea “bonito”
+    return Math.max(5, Math.round(clamped / 5) * 5);
+  }
+
+  private mapStationToRutaRow(station: Gasolinera): RutaRowVM {
+    const kmFromOrigin = this.getKmFromOrigin(station);
+    const precio = this.obtenerPrecioRelevante(station);
+
+    const ri: any = (station as any).routeInfo ?? null;
+    const desvioKm = Number.isFinite(ri?.extraKmReal) ? ri.extraKmReal : 0;
+    const desvioEur = Number.isFinite(ri?.costeDesvio) ? ri.costeDesvio : 0;
+
+    return {
+      station,
+      kmFromOrigin,
+      precio,
+      desvioKm,
+      desvioEur,
+      horario: station.horario || ''
+    };
+  }
+
+  private getKmFromOrigin(station: Gasolinera): number {
+    const anyS: any = station as any;
+
+    // 1) Ideal: propiedad explícita (si la tienes)
+    if (Number.isFinite(anyS.kmFromOrigin)) return anyS.kmFromOrigin;
+
+    // 2) Tu valor “interno” que comentaste que existe
+    if (Number.isFinite(anyS._kmFromOrigin)) return anyS._kmFromOrigin;
+
+    // 3) Fallback: distanceKm (si en tu modelo en ruta lo estás usando como km desde origen)
+    if (Number.isFinite(anyS.distanceKm)) return anyS.distanceKm;
+
+    return NaN;
+  }
+
+  // =========================
+  // Lo tuyo (sin cambios funcionales)
+  // =========================
+
+  obtenerPrecioRelevante(gasolinera: Gasolinera): number {
+    if (!this.filters || this.filters.fuelType === 'all') {
+      const preciosDisponibles = [];
+      if (gasolinera.precioGasolina95 > 0) preciosDisponibles.push(gasolinera.precioGasolina95);
+      if (gasolinera.precioGasolina98 > 0) preciosDisponibles.push(gasolinera.precioGasolina98);
+      if (gasolinera.precioDiesel > 0) preciosDisponibles.push(gasolinera.precioDiesel);
+      if (gasolinera.precioDieselPremium > 0) preciosDisponibles.push(gasolinera.precioDieselPremium);
+      if (gasolinera.precioGLP > 0) preciosDisponibles.push(gasolinera.precioGLP);
+      return preciosDisponibles.length > 0 ? Math.min(...preciosDisponibles) : 0;
+    }
+
+    switch (this.filters.fuelType) {
+      case 'Gasolina 95 E5': return gasolinera.precioGasolina95 || 0;
+      case 'Gasolina 98 E5': return gasolinera.precioGasolina98 || 0;
+      case 'Gasóleo A': return gasolinera.precioDiesel || 0;
+      case 'Gasóleo Premium': return gasolinera.precioDieselPremium || 0;
+      case 'GLP': return gasolinera.precioGLP || 0;
+      default: return 0;
+    }
+  }
+
+  obtenerTipoCombustibleSeleccionado(): string {
+    if (!this.filters || !this.filters.fuelType || this.filters.fuelType === 'all') {
+      return 'Todos los tipos';
+    }
+
+    const fuelNames: {[key: string]: string} = {
+      'Gasolina 95 E5': 'Gasolina 95 E5',
+      'Gasolina 98 E5': 'Gasolina 98 E5',
+      'Gasóleo A': 'Gasóleo A',
+      'Gasóleo Premium': 'Gasóleo Premium',
+      'GLP': 'GLP'
+    };
+
+    return fuelNames[this.filters.fuelType] || this.filters.fuelType;
+  }
+
   actualizarTiempo(): void {
     const ahora = new Date();
-    
-    // Formatear fecha (ej: "Lunes, 15 de Enero 2024")
+
     const fechaStr = ahora.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
-    // Capitalizar primera letra
+
     this.fechaActual = fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1);
-    
-    // Formatear hora (ej: "14:30:45")
+
     this.horaActual = ahora.toLocaleTimeString('es-ES', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false // Para formato 24h
+      hour12: false
     });
   }
 
   actualizarTiempoTranscurrido(): void {
     const ahora = new Date();
     const diferencia = Math.floor((ahora.getTime() - this.ultimaActualizacion.getTime()) / 1000);
-    
+
     if (diferencia < 60) {
       this.actualizadoHace = `${diferencia} segundos`;
     } else if (diferencia < 3600) {
@@ -112,7 +263,7 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
     let precioTotal = 0;
     let precioCount = 0;
     let abiertasAhora = 0;
-    
+
     let masCercana = this.stations[0];
     let masBarata = this.stations[0];
     let precioMinimo = this.obtenerPrecioRelevante(this.stations[0]);
@@ -129,7 +280,6 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
         precioCount++;
       }
 
-      // Verificar si está abierta ahora
       if (this.estaAbiertaAhora(gasolinera.horario, horaCompletaActual)) {
         abiertasAhora++;
       }
@@ -151,59 +301,32 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
     };
   }
 
-  // NUEVO MÉTODO: Verificar si una gasolinera está abierta ahora
   estaAbiertaAhora(horario: string, horaActual: number): boolean {
     if (!horario) return false;
-    
+
     const horarioLower = horario.toLowerCase();
-    
-    // Si está abierta 24h, está abierta ahora
+
     if (horarioLower.includes('24h') || horarioLower.includes('24 horas') || horarioLower.includes('24horas')) {
       return true;
     }
-    
-    // Si dice cerrado, no está abierta
+
     if (horarioLower.includes('cerrado')) {
       return false;
     }
-    
-    // Intentar extraer horario del formato "08:00-22:00"
+
     const match = horario.match(/(\d{1,2}):?(\d{2})?\s*-\s*(\d{1,2}):?(\d{2})?/);
     if (match) {
       const horaInicio = parseInt(match[1]) + (match[2] ? parseInt(match[2]) / 60 : 0);
       const horaFin = parseInt(match[3]) + (match[4] ? parseInt(match[4]) / 60 : 0);
-      
-      // Si el horario cruza medianoche (ej: 22:00-06:00)
+
       if (horaFin < horaInicio) {
         return horaActual >= horaInicio || horaActual <= horaFin;
       } else {
         return horaActual >= horaInicio && horaActual <= horaFin;
       }
     }
-    
-    // Por defecto, asumir horario comercial (8:00-22:00) si no podemos parsear
+
     return horaActual >= 8 && horaActual <= 22;
-  }
-
-  obtenerPrecioRelevante(gasolinera: Gasolinera): number {
-    if (!this.filters || this.filters.fuelType === 'all') {
-      const preciosDisponibles = [];
-      if (gasolinera.precioGasolina95 > 0) preciosDisponibles.push(gasolinera.precioGasolina95);
-      if (gasolinera.precioGasolina98 > 0) preciosDisponibles.push(gasolinera.precioGasolina98);
-      if (gasolinera.precioDiesel > 0) preciosDisponibles.push(gasolinera.precioDiesel);
-      if (gasolinera.precioDieselPremium > 0) preciosDisponibles.push(gasolinera.precioDieselPremium);
-      if (gasolinera.precioGLP > 0) preciosDisponibles.push(gasolinera.precioGLP);
-      return preciosDisponibles.length > 0 ? Math.min(...preciosDisponibles) : 0;
-    }
-
-    switch (this.filters.fuelType) {
-      case 'Gasolina 95 E5': return gasolinera.precioGasolina95 || 0;
-      case 'Gasolina 98 E5': return gasolinera.precioGasolina98 || 0;
-      case 'Gasóleo A': return gasolinera.precioDiesel || 0;
-      case 'Gasóleo Premium': return gasolinera.precioDieselPremium || 0;
-      case 'GLP': return gasolinera.precioGLP || 0;
-      default: return 0;
-    }
   }
 
   obtenerUbicacionFormateada(): string {
@@ -217,34 +340,16 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
     return 'Ubicación no disponible';
   }
 
-  // NUEVO MÉTODO: Obtener tipo de combustible seleccionado
-  obtenerTipoCombustibleSeleccionado(): string {
-    if (!this.filters || !this.filters.fuelType || this.filters.fuelType === 'all') {
-      return 'Todos los tipos';
-    }
-    
-    // Mapear tipos de combustible a nombres más legibles
-    const fuelNames: {[key: string]: string} = {
-      'Gasolina 95 E5': 'Gasolina 95 E5',
-      'Gasolina 98 E5': 'Gasolina 98 E5',
-      'Gasóleo A': 'Gasóleo A',
-      'Gasóleo Premium': 'Gasóleo Premium',
-      'GLP': 'GLP'
-    };
-    
-    return fuelNames[this.filters.fuelType] || this.filters.fuelType;
-  }
-
   formatearHorario(horario: string): string {
     if (!horario) return 'Horario no disponible';
     const horarioLower = horario.toLowerCase();
-    
+
     if (horarioLower.includes('24h') || horarioLower.includes('24 horas')) {
       return '✅ 24h';
     } else if (horarioLower.includes('cerrado')) {
       return '🔴 Cerrado';
     }
-    
+
     return horario;
   }
 
@@ -252,33 +357,92 @@ export class SummaryBoxComponent implements OnInit, OnDestroy, OnChanges {
     if (!value) return '';
     const words = value.split(' ').filter(word => word.trim() !== '');
     const uniqueWords = [...new Set(words)];
-    
+
     if (uniqueWords.length === 1) {
       return uniqueWords[0];
     }
-    
+
     const palabrasComunes = [
       'BILBAO', 'MADRID', 'BARCELONA', 'VALENCIA', 'SEVILLA',
       'C/', 'AV.', 'AVENIDA', 'CALLE', 'PLAZA', 'PASEO',
       'DE', 'LA', 'EL', 'LOS', 'LAS', 'DEL', 'AL',
       'S/N', 'S/Nº', 'KM', 'Nº', 'NUM', 'NUMBER', 'STO', 'DOMINGO'
     ];
-    
-    const filteredWords = uniqueWords.filter(word => 
+
+    const filteredWords = uniqueWords.filter(word =>
       !palabrasComunes.includes(word.toUpperCase())
     );
-    
+
     return filteredWords.length > 0 ? filteredWords.join(' ') : uniqueWords[0] || value;
   }
 
   formatPrice(value: number): string {
-    if (value === null || value === undefined || value === 0) {
+    if (value === null || value === undefined || value === 0 || isNaN(value)) {
       return '--';
     }
     return `€${value.toFixed(3).replace('.', ',')}`;
   }
 
   formatPercentage(value: number): string {
+    if (value === null || value === undefined || isNaN(value)) {
+      return '0%';
+    }
     return `${value.toFixed(0)}%`;
   }
+
+  // ✅ NUEVO: para formato en tabla ruta
+  formatKm1(value: number): string {
+    if (value === null || value === undefined || isNaN(value)) return '--';
+    return `${value.toFixed(1)}`;
+  }
+
+  formatEur2(value: number): string {
+    if (value === null || value === undefined || isNaN(value) || value === 0) return '--';
+    return `€${value.toFixed(2).replace('.', ',')}`;
+  }
+
+  // ✅ NUEVO: dirección “bonita” reutilizable
+  getDireccionCompleta(g: Gasolinera): string {
+    return (
+      (g as any).direccionCompleta
+      || g.direccion
+      || (g.calle ? (g.calle + (g.numero ? (', ' + g.numero) : '')) : '')
+      || (g.municipio ? (g.municipio + (g.provincia ? (', ' + g.provincia) : '')) : '')
+      || 'Dirección no disponible'
+    );
+  }
+
+  getRouteInfo(g: Gasolinera): any | null {
+  return (g as any)?.routeInfo ?? null;
+  }
+
+  getDesvioKm(g: Gasolinera): number | null {
+  const ri = this.getRouteInfo(g);
+  return ri?.extraKmReal ?? null;
+  }
+
+  getDesvioEuro(g: Gasolinera): number | null {
+  const ri = this.getRouteInfo(g);
+  return ri?.costeDesvio ?? null;
+  }
+
+getDireccionVisible(g: Gasolinera): string {
+  const anyG: any = g as any;
+
+  return (
+    anyG?.direccionCompleta ||
+    g.direccion ||
+    (g.calle ? (g.calle + (g.numero ? (', ' + g.numero) : '')) : '') ||
+    (g.municipio ? (g.municipio + (g.provincia ? (', ' + g.provincia) : '')) : '') ||
+    'Dirección no disponible'
+  );
+}
+
+  
+
+
+
+
+
+
 }

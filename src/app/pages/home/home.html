@@ -23,6 +23,30 @@
     </button>
   </div>
 
+  <!-- CARD PERFIL -->
+  <section class="perfil-card">
+    <div class="perfil-container">
+      <!-- Datos del perfil -->
+      <div class="datos-perfil">
+        <h2>Perfil de Usuario</h2>
+        <p><strong>Nombre:</strong> <span> Carlos</span></p>
+        <p><strong>Marca del coche:</strong> <span> BMW</span></p>
+        <p><strong>Modelo:</strong> <span> M4 GTS 2016</span></p>
+        <p><strong>Consumo:</strong> <span> 6.5 L/100km</span></p>
+      </div>
+
+      <!-- Video coche -->
+      <div class="gif-coche">
+        <video
+          src="assets/2016_bmw_m4_gts.webm"
+          autoplay
+          muted
+          playsinline
+        ></video>
+      </div>
+    </div>
+  </section>
+
   <!-- ACORDEÓN: Ubicación de Inicio -->
   <div class="acordeon-mejorado" [class.cerrado]="!acordeonAbierto.inicio">
     <div class="acordeon-cabecera" (click)="toggleAcordeon('inicio')">
@@ -65,17 +89,17 @@
           </div>
 
           <div class="botones-accion-container">
-           <button (click)="obtenerUbicacion()" class="btn-ubicacion-elegante" title="Detectar mi ubicación automáticamente">
-            <span class="btn-ubicacion-icono">📍</span>
-            <span class="btn-ubicacion-texto">Mi ubicación</span>
-        </button>
-
+            <button (click)="obtenerUbicacion()" class="btn-ubicacion-elegante" title="Detectar mi ubicación automáticamente">
+              <span class="btn-ubicacion-icono">📍</span>
+              <span class="btn-ubicacion-texto">Mi ubicación</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ACORDEÓN: Ubicación de Destino (solo modo ruta) -->
+  <!-- ACORDEÓN: Ubicación de Destino (solo modo ruta) --> 
   <div
     class="acordeon-mejorado"
     *ngIf="modoSeleccionado === 'ruta'"
@@ -88,7 +112,6 @@
         </div>
         <div class="acordeon-texto">
           <h3>Destino</h3>
-          
         </div>
       </div>
       <div class="acordeon-flecha" [class.abierto]="acordeonAbierto.destino">
@@ -100,6 +123,7 @@
       <div class="contenido-interior">
         <div class="direccion-container">
           <div class="campos-grid">
+            <!-- Campos para la dirección de destino -->
             <div class="campo-direccion">
               <label for="calleDestino">📏 Calle:</label>
               <input id="calleDestino" [(ngModel)]="destino.calle" placeholder="Ej: Avenida Diagonal" />
@@ -143,6 +167,17 @@
 
     <div class="acordeon-contenido" *ngIf="acordeonAbierto.filtros">
       <div class="contenido-interior">
+        <!-- ✅ Autonomía -->
+        <div class="campo-direccion">
+          <label for="kmDisponiblesUsuario">🔋 Autonomía (km):</label>
+          <input
+            id="kmDisponiblesUsuario"
+            type="number"
+            [(ngModel)]="kmDisponiblesUsuario"
+            placeholder="Ej: 500"
+          />
+        </div>
+
         <app-filters
           [empresasDisponibles]="empresasDisponibles"
           [filters]="filters"
@@ -153,26 +188,24 @@
   </div>
 
   <!-- BOTÓN DE BÚSQUEDA -->
-<div class="botones-busqueda-container">
-  <button 
-    (click)="ejecutarBusqueda()" 
-    class="btn-busqueda-principal"
-    [class.cargando]="busquedaEnCurso"
-    [disabled]="busquedaEnCurso">
-    <span class="btn-busqueda-icono">{{ busquedaEnCurso ? '⏳' : '🔍' }}</span>
-    <span class="btn-busqueda-texto">
-      {{ busquedaEnCurso ? 'Buscando...' : 'Buscar gasolineras' }}
-      <span *ngIf="!busquedaEnCurso && mostrarResultados && gasolinerasFiltradas.length > 0" class="contador-preview">
-        
+  <div class="botones-busqueda-container">
+    <button
+      (click)="ejecutarBusqueda()"
+      class="btn-busqueda-principal"
+      [class.cargando]="busquedaEnCurso"
+      [disabled]="busquedaEnCurso">
+      <span class="btn-busqueda-icono">{{ busquedaEnCurso ? '⏳' : '🔍' }}</span>
+      <span class="btn-busqueda-texto">
+        {{ busquedaEnCurso ? 'Buscando...' : 'Buscar gasolineras' }}
+        <span *ngIf="!busquedaEnCurso && mostrarResultados && gasolinerasFiltradas.length > 0" class="contador-preview"></span>
       </span>
-    </span>
-  </button>
-</div>
+    </button>
+  </div>
 
   <!-- ACORDEÓN: Resultados -->
-  <div class="acordeon-mejorado" 
+  <div class="acordeon-mejorado"
        id="resultados-container"
-       *ngIf="mostrarResultados" 
+       *ngIf="mostrarResultados"
        [class.cerrado]="!acordeonAbierto.resultados">
 
     <div class="acordeon-cabecera" (click)="toggleAcordeon('resultados')">
@@ -188,10 +221,10 @@
         <span>▼</span>
       </div>
     </div>
-    
+
     <div class="acordeon-contenido" *ngIf="acordeonAbierto.resultados">
       <div class="contenido-interior">
-        
+
         <!-- Mensajes de estado dentro del acordeón -->
         <div *ngIf="cargando" class="estado-cargando">
           <p>Cargando gasolineras...</p>
@@ -208,12 +241,13 @@
           </button>
         </div>
 
-        <!-- Mostrar resultados solo si hay gasolineras -->
+        <!-- ✅ Resultados (pinta TODO summary-box) -->
         <div *ngIf="!cargando && !error && gasolinerasFiltradas.length > 0">
-          <app-summary-box 
+          <app-summary-box
             [stations]="gasolinerasFiltradas"
             [filters]="filters"
-            [ubicacionUsuario]="ubicacionUsuario"> 
+            [ubicacionUsuario]="ubicacionUsuario"
+            [modo]="modoSeleccionado">
           </app-summary-box>
         </div>
 
@@ -222,7 +256,7 @@
 
   </div>
 
-  <!-- Botón Restablecer todo (fuera del acordeón de resultados) -->
+  <!-- Botón Restablecer todo -->
   <div class="restablecer-container">
     <button (click)="restablecerTodo()" class="btn-restablecer-todo">
       🔄 Restablecer todo
@@ -230,13 +264,168 @@
   </div>
 
   <!-- Botón Scroll to Top -->
-  <button 
-    class="scroll-top-btn" 
+  <button
+    class="scroll-top-btn"
     [class.visible]="mostrarBotonScrollTop"
     (click)="scrollToTop()"
     aria-label="Volver arriba"
     title="Volver arriba">
     ↑
   </button>
+
+  <!-- ===========================
+     🧪 DEPURACIÓN (MODO RUTA) - MEJORADO
+  =========================== -->
+  <section class="debug-panel" *ngIf="DEBUG_UI">
+    <h3>🧪 Depuración (Modo Ruta)</h3>
+    
+    <div class="debug-header">
+      <div class="debug-status"
+           [class.running]="debugRuta.status === 'running'" 
+           [class.done]="debugRuta.status === 'done'" 
+           [class.error]="debugRuta.status === 'error'">
+        <strong>Estado:</strong> {{ debugRuta.status }}
+      </div>
+      <div class="debug-time">
+        <strong>Tiempo:</strong> {{ debugRuta.elapsedMs }} ms
+      </div>
+    </div>
+
+    <!-- Mostrar información clave de inmediato -->
+    <div class="debug-summary" *ngIf="debugRuta.dataset.totalStations > 0">
+      <h4>📊 Resumen</h4>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span class="label">Gasolineras totales:</span>
+          <span class="value">{{ debugRuta.dataset.totalStations }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">Filtradas:</span>
+          <span class="value">{{ debugRuta.dataset.afterDatasetFilters }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">En corredor (total):</span>
+          <span class="value">{{ debugRuta.dataset.corridorCandidatesTotal }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">En autonomía (corredor):</span>
+          <span class="value">{{ debugRuta.dataset.corridorCandidatesEnAutonomia }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botones para expandir/colapsar secciones -->
+    <div class="debug-controls">
+      <button type="button" (click)="toggleDebugSection('inputs')">
+        {{ debugSections.inputs ? '▼' : '▶' }} 1) Entradas
+      </button>
+      <button type="button" (click)="toggleDebugSection('route')">
+        {{ debugSections.route ? '▼' : '▶' }} 2) Ruta base
+      </button>
+      <button type="button" (click)="toggleDebugSection('dataset')">
+        {{ debugSections.dataset ? '▼' : '▶' }} 3) Dataset y filtros
+      </button>
+      <button type="button" (click)="toggleDebugSection('googleCalls')">
+        {{ debugSections.googleCalls ? '▼' : '▶' }} 4) Llamadas Google
+      </button>
+      <button type="button" (click)="toggleDebugSection('enriched')">
+        {{ debugSections.enriched ? '▼' : '▶' }} 5) Resultados
+      </button>
+      <button type="button" (click)="toggleDebugSection('final')">
+        {{ debugSections.final ? '▼' : '▶' }} 6) Top 3 final
+      </button>
+      <button type="button" (click)="toggleDebugSection('ui')">
+        {{ debugSections.ui ? '▼' : '▶' }} 7) Estado UI
+      </button>
+    </div>
+
+    <!-- Secciones colapsables -->
+    <div *ngIf="debugSections.inputs" class="debug-section">
+      <h4>1) Entradas</h4>
+      <pre>{{ debugRuta.input | json }}</pre>
+    </div>
+
+    <div *ngIf="debugSections.route" class="debug-section">
+      <h4>2) Ruta base</h4>
+      <pre>{{ debugRuta.baseRoute | json }}</pre>
+    </div>
+
+    <div *ngIf="debugSections.dataset" class="debug-section">
+      <h4>3) Dataset y filtros</h4>
+      <div *ngIf="debugRuta.dataset.preRankTop.length > 0">
+        <h5>Top pre-ranking (primeros 5):</h5>
+        <ul>
+          <li *ngFor="let item of debugRuta.dataset.preRankTop.slice(0, 5)">
+            {{ item.rotulo }} - Dist: {{ item.minDistRuta | number:'1.2-2' }}km - Precio: {{ item.precio | number:'1.3-3' }}€
+          </li>
+        </ul>
+      </div>
+      <pre>{{ debugRuta.dataset | json }}</pre>
+    </div>
+
+    <div *ngIf="debugSections.googleCalls" class="debug-section">
+      <h4>4) Llamadas "ruta con parada"</h4>
+      <pre>{{ debugRuta.googleCalls | json }}</pre>
+    </div>
+
+    <div *ngIf="debugSections.enriched" class="debug-section">
+      <h4>5) Resultados enriquecidos (tabla)</h4> 
+
+      <div *ngIf="(debugRuta.enriched?.results?.length ?? 0) === 0">
+        <em>No hay filas enriquecidas aún.</em>
+      </div>
+
+      <div class="debug-table-wrap" *ngIf="(debugRuta.enriched?.results?.length ?? 0) > 0">
+        <table class="debug-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Rótulo</th>
+              <th>Dirección</th>
+              <th>Precio</th>
+              <th>distToGas (km)</th>
+              <th>distConParada (km)</th>
+              <th>extraKm</th>
+              <th>litrosExtra</th>
+              <th>costeDesvío</th>
+              <th>minDistRuta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of debugRuta.enriched.results; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td>{{ r.rotulo }}</td>
+              <td>{{ r.direccion }}</td>
+              <td>{{ r.precioLitro | number:'1.3-3' }}</td>
+              <td>{{ r.distToGasKm | number:'1.2-2' }}</td>
+              <td>{{ r.distConParadaKm | number:'1.2-2' }}</td>
+              <td>{{ r.extraKmReal | number:'1.2-2' }}</td>
+              <td>{{ r.litrosExtra | number:'1.3-3' }}</td>
+              <td>{{ r.costeDesvio | number:'1.3-3' }}</td>
+              <td>{{ r.minDistToRouteKm | number:'1.2-2' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div *ngIf="debugSections.final" class="debug-section">
+      <h4>6) Top 3 final</h4>
+      <div *ngIf="debugRuta.final.top3.length > 0">
+        <h5>Resultados finales:</h5>
+        <ul>
+          <li *ngFor="let item of debugRuta.final.top3; let i = index">
+            #{{ i + 1 }}: {{ item.rotulo }} - Precio: {{ item.precio | number:'1.3-3' }}€ - Extra: {{ item.extraKmReal | number:'1.2-2' }}km - Coste: {{ item.costeDesvio | number:'1.3-3' }}€
+          </li>
+        </ul>
+      </div>
+      <pre>{{ debugRuta.final | json }}</pre>
+    </div>
+
+    <div *ngIf="debugSections.ui" class="debug-section">
+      <h4>7) Estado UI</h4>
+      <pre>{{ debugRuta.ui | json }}</pre>
+    </div>
+  </section>
 
 </div>

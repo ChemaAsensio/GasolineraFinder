@@ -1,10 +1,13 @@
+/* Sección "Sobre GasolineraFinder" */
 .about-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: white; /* Cambiar todo el texto a blanco */
 }
 
+/* Estilos para los títulos */
 .about-header {
   text-align: center;
   margin-bottom: 3rem;
@@ -13,18 +16,19 @@
 
   h1 {
     font-size: 2.8rem;
-    color: #2c3e50;
+    color: var(--accent-orange);  /* Naranja, el color que ya estás usando */
     margin-bottom: 0.5rem;
     font-weight: 700;
   }
 
   .subtitle {
     font-size: 1.2rem;
-    color: #7f8c8d;
+    color: #ffffff;  /* Blanco para el subtitulo */
     font-style: italic;
   }
 }
 
+/* Card similar a "Inicio / Filtros" */
 .about-content {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -33,12 +37,12 @@
 }
 
 .about-card {
-  background: white;
-  border-radius: 12px;
+  background: rgba(22, 22, 22, 0.55); /* Fondo translúcido para el mismo look */
+  border-radius: var(--radius-lg);
   padding: 1.8rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-  border: 1px solid #e0e0e0;
+  border: 1px solid rgba(255, 148, 77, 0.16);
 
   &:hover {
     transform: translateY(-5px);
@@ -47,7 +51,7 @@
 
   h2 {
     font-size: 1.5rem;
-    color: #3498db;
+    color: var(--accent-orange);  /* Título en naranja */
     margin-bottom: 1rem;
     display: flex;
     align-items: center;
@@ -55,7 +59,7 @@
   }
 
   p {
-    color: #555;
+    color: #ffffff;  /* Blanco para los párrafos */
     line-height: 1.6;
     margin-bottom: 1rem;
   }
@@ -68,21 +72,22 @@
       padding: 0.5rem 0;
       padding-left: 1.5rem;
       position: relative;
-      color: #555;
+      color: #ffffff; /* Blanco en los items de lista */
 
       &::before {
         content: "✓";
         position: absolute;
         left: 0;
-        color: #2ecc71;
+        color: var(--accent-orange); /* Color naranja en los iconos */
         font-weight: bold;
       }
     }
   }
 }
 
+/* Información de contacto */
 .contact-link {
-  color: #3498db;
+  color: var(--accent-orange);
   text-decoration: none;
   font-weight: 600;
 
@@ -92,7 +97,7 @@
 }
 
 .contact-info {
-  color: #2c3e50 !important;
+  color: #ffffff !important;  /* Blanco para el contacto */
   font-weight: 500;
   margin: 0.3rem 0 !important;
   display: flex;
@@ -107,7 +112,7 @@
   border-top: 2px solid #e0e0e0;
 
   .btn-back {
-    background: #3498db;
+    background: var(--accent-orange);
     color: white;
     border: none;
     padding: 0.8rem 2rem;

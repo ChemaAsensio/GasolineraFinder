@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Ubicacion } from '../models/location';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class GeolocationService {
@@ -17,10 +18,10 @@ export class GeolocationService {
         async (pos) => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
-          
+
           try {
             const direccionData = await this.getDireccionOpenStreetMap(lat, lon);
-            
+
             const ubicacion: Ubicacion = {
               latitud: lat,
               longitud: lon,
@@ -28,12 +29,11 @@ export class GeolocationService {
               numero: direccionData.numero || '',
               ciudad: direccionData.ciudad || 'Ubicación actual',
               provincia: direccionData.provincia || '',
-              direccionCompleta: direccionData.direccionCompleta || ''
+              direccionCompleta: direccionData.direccionCompleta || '',
             };
-            
+
             resolve(ubicacion);
-            
-          } catch (error) {
+          } catch {
             // Devolver ubicación básica si falla la geocodificación
             resolve({
               latitud: lat,
@@ -42,7 +42,7 @@ export class GeolocationService {
               numero: '',
               ciudad: 'Ubicación actual',
               provincia: '',
-              direccionCompleta: `Lat: ${lat}, Lon: ${lon}`
+              direccionCompleta: `Lat: ${lat}, Lon: ${lon}`,
             });
           }
         },
@@ -70,24 +70,38 @@ export class GeolocationService {
     });
   }
 
-  // Servicio GRATUITO - OpenStreetMap
-  private async getDireccionOpenStreetMap(lat: number, lon: number): Promise<any> {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=es`;
-    
-    const response: any = await this.http.get(url).toPromise();
-    
-    if (!response.address) {
+  // Servicio GRATUITO - OpenStreetMap (Nominatim reverse)
+  private async getDireccionOpenStreetMap(lat: number, lon: number): Promise<{
+    direccionCompleta?: string;
+    calle?: string;
+    numero?: string;
+    ciudad?: string;
+    provincia?: string;
+  }> {
+    // (encodeURIComponent aquí es “por higiene”, aunque lat/lon son números)
+    const url =
+      `https://nominatim.openstreetmap.org/reverse` +
+      `?format=json` +
+      `&lat=${encodeURIComponent(String(lat))}` +
+      `&lon=${encodeURIComponent(String(lon))}` +
+      `&zoom=18` +
+      `&addressdetails=1` +
+      `&accept-language=es`;
+
+    const response: any = await firstValueFrom(this.http.get(url));
+
+    if (!response?.address) {
       throw new Error('No se pudo obtener la dirección.');
     }
 
     const address = response.address;
-    
+
     return {
       direccionCompleta: response.display_name || '',
       calle: address.road || address.street || address.pedestrian || '',
       numero: address.house_number || '',
       ciudad: address.city || address.town || address.village || address.municipality || '',
-      provincia: address.state || address.region || ''
+      provincia: address.state || address.region || '',
     };
   }
 
