@@ -6,5 +6,5 @@ export interface Ubicacion {
   latitud: number;
   longitud: number;
   direccionCompleta?: string;
-  direccion?: string; // Mantener por compatibilidad
+  direccion?: string; 
 }

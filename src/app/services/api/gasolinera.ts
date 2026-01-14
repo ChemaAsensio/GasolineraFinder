@@ -7,17 +7,15 @@ import { Filters, FuelType } from '../../models/filter';
 import { Ubicacion } from '../../models/location';
 import { CompanyNormalizerService } from '../company-normalizer';
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class GasolineraService {
   private apiUrl =
     'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes';
 
+  // ✅ Para GET no hace falta Content-Type (y puede dar problemas)
+  // ✅ Importante: NO se puede setear User-Agent desde el navegador.
   private httpHeaders = new HttpHeaders({
     Accept: 'application/json',
-    'Content-Type': 'application/json',
-    'User-Agent': 'GasolineraFinder/1.0',
   });
 
   constructor(
@@ -27,35 +25,36 @@ export class GasolineraService {
 
   // Obtener todas las gasolineras
   getGasolineras(): Observable<Gasolinera[]> {
-    console.log('🌐 Llamando a API:', `${this.apiUrl}/EstacionesTerrestres/`);
+    const url = `${this.apiUrl}/EstacionesTerrestres/`;
+    console.log('🌐 Llamando a API:', url);
 
-    return this.http
-      .get<any>(`${this.apiUrl}/EstacionesTerrestres/`, {
-        headers: this.httpHeaders,
+    return this.http.get<any>(url, { headers: this.httpHeaders }).pipe(
+      tap((response) => {
+        console.log('📦 Respuesta API recibida');
+        console.log(
+          '🔢 Número de gasolineras:',
+          response?.ListaEESSPrecio?.length || 0
+        );
+      }),
+      map((response) => this.transformarDatosAPI(response)),
+      catchError((error) => {
+        console.error('❌ Error en petición HTTP:', error);
+        return this.getGasolinerasConFetch();
       })
-      .pipe(
-        tap((response) => {
-          console.log('📦 Respuesta API recibida');
-          console.log(
-            '🔢 Número de gasolineras:',
-            response?.ListaEESSPrecio?.length || 0
-          );
-        }),
-        map((response) => this.transformarDatosAPI(response)),
-        catchError((error) => {
-          console.error('❌ Error en petición HTTP:', error);
-          return this.getGasolinerasConFetch();
-        })
-      );
+    );
   }
 
   private getGasolinerasConFetch(): Observable<Gasolinera[]> {
     return new Observable((observer) => {
       console.log('🔧 Usando fetch como fallback...');
 
-      fetch(
-        'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/'
-      )
+      fetch(`${this.apiUrl}/EstacionesTerrestres/`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          // ⚠️ NO poner User-Agent aquí. El navegador lo bloqueará igual.
+        },
+      })
         .then((response) => response.text())
         .then((text) => {
           const cleanedText = text.replace(/^\uFEFF/, '');
@@ -64,7 +63,7 @@ export class GasolineraService {
             const gasolineras = this.transformarDatosAPI(data);
             observer.next(gasolineras);
             observer.complete();
-          } catch (e) {
+          } catch {
             observer.next([]);
             observer.complete();
           }
@@ -77,70 +76,68 @@ export class GasolineraService {
   }
 
   private transformarDatosAPI(data: any): Gasolinera[] {
-  if (!data?.ListaEESSPrecio) {
-    console.log('⚠️ No hay ListaEESSPrecio en la respuesta');
-    return [];
+    if (!data?.ListaEESSPrecio) {
+      console.log('⚠️ No hay ListaEESSPrecio en la respuesta');
+      return [];
+    }
+
+    const gasolineras: Gasolinera[] = data.ListaEESSPrecio.map((estacion: any) => {
+      const precioGasolina95 = this.parsearPrecio(estacion['Precio Gasolina 95 E5']);
+      const precioGasolina98 = this.parsearPrecio(estacion['Precio Gasolina 98 E5']);
+      const precioDiesel = this.parsearPrecio(estacion['Precio Gasóleo A']);
+      const precioDieselPremium = this.parsearPrecio(estacion['Precio Gasóleo Premium']);
+      const precioGLP = this.parsearPrecio(estacion['Precio Gases licuados del petróleo']);
+
+      const precios = {
+        'Gasolina 95 E5': precioGasolina95 || null,
+        'Gasolina 98 E5': precioGasolina98 || null,
+        'Gasóleo A': precioDiesel || null,
+        'Gasóleo Premium': precioDieselPremium || null,
+        GLP: precioGLP || null,
+      };
+
+      return {
+        id: estacion['IDEESS'] || '',
+        rotulo: estacion['Rótulo'] || '',
+        direccion: estacion['Dirección'] || '',
+        direccionCompleta: estacion['Dirección'] || '',
+        calle: estacion['Calle'] || '',
+        numero: estacion['Numero'] || '',
+        municipio: estacion['Municipio'] || '',
+        provincia: estacion['Provincia'] || '',
+        codigoPostal: estacion['C.P.'] || '',
+        latitud: this.parsearCoordenada(estacion['Latitud']),
+        longitud: this.parsearCoordenada(estacion['Longitud (WGS84)']),
+        localidad: estacion['Localidad'] || '',
+        margen: estacion['Margen'] || '',
+        tipoVenta: estacion['Tipo Venta'] || '',
+        horario: estacion['Horario'] || '',
+        remision: estacion['Remisión'] || '',
+        bioEtanol: estacion['BioEtanol'] || '',
+        esterMetilico: estacion['Éster metílico'] || '',
+        porcentajeBioEtanol: estacion['% BioEtanol'] || '',
+        porcentajeEsterMetilico: estacion['% Éster metílico'] || '',
+
+        // ✅ unificados
+        precios,
+
+        // ✅ precios “planos”
+        precioGasolina95,
+        precioGasolina98,
+        precioDiesel,
+        precioDieselPremium,
+        precioGLP,
+      };
+    });
+
+    // Filtrar gasolineras con coordenadas inválidas
+    const gasolinerasValidas = gasolineras.filter(
+      (g: Gasolinera) => g.latitud !== 0 && g.longitud !== 0
+    );
+
+    console.log(`✅ ${gasolinerasValidas.length} gasolineras válidas`);
+    return gasolinerasValidas;
   }
-
-  const gasolineras: Gasolinera[] = data.ListaEESSPrecio.map((estacion: any) => {
-    const precioGasolina95 = this.parsearPrecio(estacion['Precio Gasolina 95 E5']);
-    const precioGasolina98 = this.parsearPrecio(estacion['Precio Gasolina 98 E5']);
-    const precioDiesel = this.parsearPrecio(estacion['Precio Gasóleo A']);
-    const precioDieselPremium = this.parsearPrecio(estacion['Precio Gasóleo Premium']);
-    const precioGLP = this.parsearPrecio(estacion['Precio Gases licuados del petróleo']);
-
-    const precios = {
-      'Gasolina 95 E5': precioGasolina95 || null,
-      'Gasolina 98 E5': precioGasolina98 || null,
-      'Gasóleo A': precioDiesel || null,
-      'Gasóleo Premium': precioDieselPremium || null,
-      GLP: precioGLP || null,
-    };
-
-    return {
-      id: estacion['IDEESS'] || '',
-      rotulo: estacion['Rótulo'] || '',
-      direccion: estacion['Dirección'] || '',
-      direccionCompleta: estacion['Dirección'] || '',  // Asegúrate que se asigna correctamente
-      calle: estacion['Calle'] || '', // Asegúrate que se asigna correctamente
-      numero: estacion['Numero'] || '', // Asegúrate que se asigna correctamente
-      municipio: estacion['Municipio'] || '',
-      provincia: estacion['Provincia'] || '',
-      codigoPostal: estacion['C.P.'] || '',
-      latitud: this.parsearCoordenada(estacion['Latitud']),
-      longitud: this.parsearCoordenada(estacion['Longitud (WGS84)']),
-      localidad: estacion['Localidad'] || '',
-      margen: estacion['Margen'] || '',
-      tipoVenta: estacion['Tipo Venta'] || '',
-      horario: estacion['Horario'] || '',
-      remision: estacion['Remisión'] || '',
-      bioEtanol: estacion['BioEtanol'] || '',
-      esterMetilico: estacion['Éster metílico'] || '',
-      porcentajeBioEtanol: estacion['% BioEtanol'] || '',
-      porcentajeEsterMetilico: estacion['% Éster metílico'] || '',
-
-      // ✅ unificados
-      precios,
-
-      // ✅ precios “planos”
-      precioGasolina95,
-      precioGasolina98,
-      precioDiesel,
-      precioDieselPremium,
-      precioGLP,
-    };
-  });
-
-  // Filtrar gasolineras con coordenadas inválidas
-  const gasolinerasValidas = gasolineras.filter(
-    (g: Gasolinera) => g.latitud !== 0 && g.longitud !== 0
-  );
-
-  console.log(`✅ ${gasolinerasValidas.length} gasolineras válidas`);
-  return gasolinerasValidas;
-}
-
-
 
   private parsearCoordenada(coordenada: string): number {
     if (!coordenada || coordenada.trim() === '') return 0;
@@ -216,10 +213,7 @@ export class GasolineraService {
           if (precioMinimo > filtros.maxPrice) return false;
         }
       } else {
-        const precioRelevante = this.obtenerPrecioPorTipo(
-          gasolinera,
-          filtros.fuelType
-        );
+        const precioRelevante = this.obtenerPrecioPorTipo(gasolinera, filtros.fuelType);
         if (!(precioRelevante > 0)) return false;
         if (filtros.maxPrice > 0 && precioRelevante > filtros.maxPrice) return false;
       }
@@ -282,9 +276,7 @@ export class GasolineraService {
     const tipos = ['Gasolina 95 E5', 'Gasolina 98 E5', 'Gasóleo A', 'Gasóleo Premium', 'GLP'] as const;
 
     tipos.forEach((tipo) => {
-      const disponibles = gasolineras.filter(
-        (g) => this.obtenerPrecioPorTipo(g, tipo) > 0
-      );
+      const disponibles = gasolineras.filter((g) => this.obtenerPrecioPorTipo(g, tipo) > 0);
       conteoCombustible[tipo] = disponibles.length;
     });
 
@@ -306,7 +298,9 @@ export class GasolineraService {
       const distanciaMax = Math.max(...distancias);
       const distanciaProm = distancias.reduce((a, b) => a + b, 0) / distancias.length;
 
-      console.log(`📏 Distancias: min=${distanciaMin.toFixed(2)}km, max=${distanciaMax.toFixed(2)}km, prom=${distanciaProm.toFixed(2)}km`);
+      console.log(
+        `📏 Distancias: min=${distanciaMin.toFixed(2)}km, max=${distanciaMax.toFixed(2)}km, prom=${distanciaProm.toFixed(2)}km`
+      );
       console.log(`📏 Filtro distancia: ${filtros.maxDistance}km`);
     }
 
@@ -320,7 +314,9 @@ export class GasolineraService {
         const precioMax = Math.max(...precios);
         const precioProm = precios.reduce((a, b) => a + b, 0) / precios.length;
 
-        console.log(`💰 ${filtros.fuelType}: min=${precioMin.toFixed(3)}, max=${precioMax.toFixed(3)}, prom=${precioProm.toFixed(3)}`);
+        console.log(
+          `💰 ${filtros.fuelType}: min=${precioMin.toFixed(3)}, max=${precioMax.toFixed(3)}, prom=${precioProm.toFixed(3)}`
+        );
         console.log(`💰 Filtro precio: ${filtros.maxPrice > 0 ? filtros.maxPrice : 'Sin límite'}`);
       } else {
         console.log(`💰 ${filtros.fuelType}: No hay precios disponibles en la zona`);
@@ -328,31 +324,28 @@ export class GasolineraService {
     }
   }
 
- private obtenerPrecioPorTipo(gasolinera: Gasolinera, fuelType: FuelType): number {
-  switch (fuelType) {
-    case 'Gasolina 95 E5': return gasolinera.precioGasolina95;
-    case 'Gasolina 98 E5': return gasolinera.precioGasolina98;
-    case 'Gasóleo A': return gasolinera.precioDiesel;
-    case 'Gasóleo Premium': return gasolinera.precioDieselPremium;
-    case 'GLP': return gasolinera.precioGLP;
+  private obtenerPrecioPorTipo(gasolinera: Gasolinera, fuelType: FuelType): number {
+    switch (fuelType) {
+      case 'Gasolina 95 E5': return gasolinera.precioGasolina95;
+      case 'Gasolina 98 E5': return gasolinera.precioGasolina98;
+      case 'Gasóleo A': return gasolinera.precioDiesel;
+      case 'Gasóleo Premium': return gasolinera.precioDieselPremium;
+      case 'GLP': return gasolinera.precioGLP;
+      case 'all': {
+        const precios = [
+          gasolinera.precioGasolina95,
+          gasolinera.precioGasolina98,
+          gasolinera.precioDiesel,
+          gasolinera.precioDieselPremium,
+          gasolinera.precioGLP
+        ].filter(p => p > 0);
 
-    case 'all': {
-      const precios = [
-        gasolinera.precioGasolina95,
-        gasolinera.precioGasolina98,
-        gasolinera.precioDiesel,
-        gasolinera.precioDieselPremium,
-        gasolinera.precioGLP
-      ].filter(p => p > 0);
-
-      return precios.length ? Math.min(...precios) : 0;
+        return precios.length ? Math.min(...precios) : 0;
+      }
+      default:
+        return 0;
     }
-
-    default:
-      return 0;
   }
-}
-
 
   obtenerEstadisticasZona(
     gasolineras: Gasolinera[],
