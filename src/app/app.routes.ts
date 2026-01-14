@@ -9,3 +9,4 @@ export const routes: Routes = [
   { path: 'contact', component: Contact },
   { path: '**', redirectTo: '' }  // Redirige cualquier ruta no válida al inicio
 ];
+

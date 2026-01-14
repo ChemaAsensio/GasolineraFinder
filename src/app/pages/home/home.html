@@ -99,7 +99,7 @@
     </div>
   </div>
 
-  <!-- ACORDEÓN: Ubicación de Destino (solo modo ruta) --> 
+  <!-- ACORDEÓN: Ubicación de Destino (solo modo ruta) -->
   <div
     class="acordeon-mejorado"
     *ngIf="modoSeleccionado === 'ruta'"
@@ -201,6 +201,68 @@
       </span>
     </button>
   </div>
+
+  <!-- ✅ MAPA (después de "buscar gasolineras") -->
+  <section class="map-card">
+    <div class="map-header">
+      <h3>🗺️ Mapa</h3>
+      <p class="map-subtitle">
+        Origen (🏠), destino (🎯) y selección (⭐).
+      </p>
+    </div>
+
+    <google-map
+      width="100%"
+      height="360px"
+      [center]="mapCenter"
+      [zoom]="mapZoom"
+      [options]="mapOptions"
+     >
+      <!-- Origen -->
+      <map-marker
+        *ngIf="markerOrigen"
+        [position]="markerOrigen"
+        [label]="'🏠'"
+        [title]="'Origen'"
+      ></map-marker>
+
+      <!-- Destino -->
+      <map-marker
+        *ngIf="markerDestino"
+        [position]="markerDestino"
+        [label]="'🎯'"
+        [title]="'Destino'"
+      ></map-marker>
+
+      <!-- Selección -->
+      <map-marker
+        *ngIf="markerSeleccion"
+        [position]="markerSeleccion"
+        [label]="'⭐'"
+        [title]="'Gasolinera seleccionada'"
+      ></map-marker>
+
+      <!-- ✅ Polilínea de la ruta -->
+      <map-polyline
+       *ngIf="routePath?.length"
+       [path]="routePath"
+       [options]="routePolylineOptions">
+      </map-polyline>
+
+       <!-- ✅ Markers gasolineras (estrella) -->
+      <map-marker
+       *ngFor="let m of stationMarkers"
+        #mkr="mapMarker"
+        [position]="m.position"
+        [options]="stationMarkerOptions"
+        [title]="m.title"
+        (mapClick)="onStationMarkerClick(mkr, m.station)">
+      </map-marker> 
+
+
+
+    </google-map>
+  </section>
 
   <!-- ACORDEÓN: Resultados -->
   <div class="acordeon-mejorado"

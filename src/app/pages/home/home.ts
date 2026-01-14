@@ -1,8 +1,16 @@
 // src/app/pages/home/home.ts
-import { Component, OnInit, OnDestroy, AfterViewChecked, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  AfterViewChecked,
+  ChangeDetectorRef,
+  ViewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 
 import { GasolineraService } from '../../services/api/gasolinera';
 import { GeolocationService } from '../../services/geolocation';
@@ -14,9 +22,19 @@ import { Filters, FuelType } from '../../models/filter';
 import { FiltersComponent } from '../../components/filters/filters';
 import { SummaryBoxComponent } from '../../components/summary-box/summary-box';
 import { Ubicacion } from '../../models/location';
-import { StationList } from '../../components/station-list/station-list';
+import { environment } from '../../../environments/environment';
 
 import { haversineKm } from '../../utils/haversine';
+import { GoogleRoutesService } from '../../services/google/google-routes.service';
+
+// ✅ Google Maps (Angular wrapper)
+import {
+  GoogleMapsModule,
+  GoogleMap,
+  MapMarker,
+  MapPolyline,
+  MapInfoWindow
+} from '@angular/google-maps';
 
 // ===========================
 // 🧪 DEBUG INTERFACES
@@ -51,9 +69,8 @@ interface DebugRutaDataset {
   afterDatasetFilters: number;
   radioKm: number;
 
-  // ✅ NUEVO: métricas claras para no confundir
-  corridorCandidatesTotal: number;        // antes de aplicar autonomía
-  corridorCandidatesEnAutonomia: number;  // después de aplicar autonomía (los que pasan a preRank)
+  corridorCandidatesTotal: number;
+  corridorCandidatesEnAutonomia: number;
 
   N: number;
   preRankTop: Array<{ rotulo: string; minDistRuta: number; precio: number }>;
@@ -66,6 +83,7 @@ interface DebugRutaGoogleCalls {
   finished: number;
   failed: number;
   discardedByAutonomy: number;
+  discardedByDetour: number; // ✅ NUEVO
   errors: Array<{ rotulo: string; msg: string }>;
 }
 
@@ -112,7 +130,7 @@ type RouteBaseInfo = {
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, FormsModule, FiltersComponent, SummaryBoxComponent],
+  imports: [CommonModule, FormsModule, FiltersComponent, SummaryBoxComponent, GoogleMapsModule],
   templateUrl: './home.html',
   styleUrls: ['./home.scss'],
 })
@@ -151,14 +169,17 @@ export class Home implements OnInit, OnDestroy, AfterViewChecked {
   readonly reservaMinKm = 15;
   readonly consumoFijoL100 = 6.0;
 
-  // ✅ Google (opcional). Si no pones key, usa fallback Nominatim para geocoding.
-  googleApiKey: string = '';
+  // ✅ Ya NO usamos “googleApiKey” para llamar a Google “a mano”.
+  // El service usa environment.googleMapsApiKey.
+  private get hasGoogleKey(): boolean {
+    return !!(environment.googleMapsApiKey && environment.googleMapsApiKey.trim().length > 0);
+  }
 
   filters: Filters = {
     fuelType: 'Gasolina 95 E5',
     companies: [],
     maxPrice: 0,
-    maxDistance: 50,
+    maxDistance: 50, // ✅ EN MODO RUTA: esto lo tratamos como "DESVÍO MÁXIMO" (km)
     onlyOpen: false,
     sortBy: 'distance',
     companyMode: 'include',
@@ -190,13 +211,72 @@ export class Home implements OnInit, OnDestroy, AfterViewChecked {
   private onWinResize = () => this.checkScrollNeeded();
   private onWinScroll = () => this.checkScrollNeeded();
 
+  // ✅ NUEVO: radio fijo del “corredor” (distancia lateral a la ruta)
+  // El slider maxDistance lo usamos SOLO como “desvío máximo real”.
+  private readonly corridorRadiusKm = 7;
+
+  // =========================================================
+  // ✅ MAPA (origen/destino/selección + fit bounds)
+  // =========================================================
+
+  
+  @ViewChild(MapInfoWindow) infoWindow?: MapInfoWindow;
+
+selectedInfoForMap: {
+  rotulo: string;
+  direccion: string;
+  precio: number;
+  horario: string;
+} | null = null;
+
+
+onStationMarkerClick(marker: MapMarker, station: Gasolinera): void {
+  this.onGasolineraSeleccionada(station, false);
+
+  this.selectedInfoForMap = {
+    rotulo: station.rotulo || 'Gasolinera',
+    direccion: this.formatAddress(station as any),
+    precio: this.obtenerPrecioRelevante(station),
+    horario: station.horario || ''
+  };
+
+  this.cd.detectChanges();
+  setTimeout(() => this.infoWindow?.open(marker), 0);
+}
+
+
+
+
+  
+  // =========================================================
+  // ✅ MAPA (origen/destino/selección + fit bounds)
+  // =========================================================
+  @ViewChild(GoogleMap) googleMap?: GoogleMap;
+
+  // Center/zoom iniciales (si no hay bounds)
+  mapCenter: google.maps.LatLngLiteral = { lat: 40.4168, lng: -3.7038 };
+  mapZoom = 6;
+
+  mapOptions: google.maps.MapOptions = {
+    disableDefaultUI: false,
+    zoomControl: true,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: true,
+  };
+
+  markerOrigen?: google.maps.LatLngLiteral;
+  markerDestino?: google.maps.LatLngLiteral;
+  markerSeleccion?: google.maps.LatLngLiteral;
+
   constructor(
-    private cd: ChangeDetectorRef, // ✅ AÑADIDO: ChangeDetectorRef
+    private cd: ChangeDetectorRef,
     private gasolineraService: GasolineraService,
     private geolocationService: GeolocationService,
     private storageService: StorageService,
     private companyNormalizer: CompanyNormalizerService,
-    private http: HttpClient
+    private http: HttpClient,
+    private googleRoutes: GoogleRoutesService
   ) {}
 
   // ===========================
@@ -204,7 +284,6 @@ export class Home implements OnInit, OnDestroy, AfterViewChecked {
   // ===========================
   DEBUG_UI = true;
 
-  // Control de secciones expandidas del debug panel
   debugSections = {
     inputs: true,
     route: true,
@@ -241,11 +320,10 @@ export class Home implements OnInit, OnDestroy, AfterViewChecked {
     },
 
     dataset: {
-      totalStations: this.gasolineras.length,
+      totalStations: 0,
       afterDatasetFilters: 0,
       radioKm: 0,
 
-        // ✅ NUEVO
       corridorCandidatesTotal: 0,
       corridorCandidatesEnAutonomia: 0,
 
@@ -260,6 +338,7 @@ export class Home implements OnInit, OnDestroy, AfterViewChecked {
       finished: 0,
       failed: 0,
       discardedByAutonomy: 0,
+      discardedByDetour: 0,
       errors: [],
     },
 
@@ -280,151 +359,111 @@ export class Home implements OnInit, OnDestroy, AfterViewChecked {
     },
   };
 
-// ✅ Método mejorado para actualizar debugRuta - SIN detectChanges() (evita NG0100)
-private updateDebugRuta(updates: Partial<typeof this.debugRuta>): void {
-  // 1) Copia profunda del estado actual (para no mutar)
-  let current: any;
-  try {
-    current = JSON.parse(JSON.stringify(this.debugRuta));
-  } catch {
-    current = { ...this.debugRuta };
-  }
-
-  // 2) Merge profundo (objetos) sin mutar referencias
-  const mergeDeep = (target: any, source: any): any => {
-    if (source === null || source === undefined) return target;
-
-    // si es primitivo o array -> reemplaza
-    if (typeof source !== 'object' || Array.isArray(source)) return source;
-
-    // target debe ser objeto
-    if (typeof target !== 'object' || target === null || Array.isArray(target)) target = {};
-
-    for (const key of Object.keys(source)) {
-      const sVal = source[key];
-      const tVal = target[key];
-
-      // si es array -> reemplaza completo
-      if (Array.isArray(sVal)) {
-        target[key] = [...sVal];
-        continue;
-      }
-
-      // si es objeto -> merge recursivo
-      if (sVal && typeof sVal === 'object') {
-        target[key] = mergeDeep(tVal, sVal);
-        continue;
-      }
-
-      // primitivo
-      target[key] = sVal;
+  private updateDebugRuta(updates: Partial<typeof this.debugRuta>): void {
+    let current: any;
+    try {
+      current = JSON.parse(JSON.stringify(this.debugRuta));
+    } catch {
+      current = { ...this.debugRuta };
     }
 
-    return target;
-  };
+    const mergeDeep = (target: any, source: any): any => {
+      if (source === null || source === undefined) return target;
+      if (typeof source !== 'object' || Array.isArray(source)) return source;
+      if (typeof target !== 'object' || target === null || Array.isArray(target)) target = {};
 
-  const merged = mergeDeep(current, updates);
+      for (const key of Object.keys(source)) {
+        const sVal = source[key];
+        const tVal = target[key];
 
-  // 3) Asignación INMUTABLE (nuevo objeto)
-  this.debugRuta = { ...merged };
+        if (Array.isArray(sVal)) {
+          target[key] = [...sVal];
+          continue;
+        }
+        if (sVal && typeof sVal === 'object') {
+          target[key] = mergeDeep(tVal, sVal);
+          continue;
+        }
+        target[key] = sVal;
+      }
+      return target;
+    };
 
-  // 4) Opcional: marca para check (útil si en el futuro pones OnPush)
-  this.cd.markForCheck();
-}
+    const merged = mergeDeep(current, updates);
+    this.debugRuta = { ...merged };
+    this.cd.markForCheck();
+  }
 
-// ✅ Método ESPECÍFICO para actualizar dataset - SIN detectChanges() (evita NG0100)
-private updateDebugDataset(updates: Partial<typeof this.debugRuta.dataset>): void {
-  const newDataset = {
-    ...this.debugRuta.dataset,
-    ...updates,
-  };
+  private updateDebugDataset(updates: Partial<typeof this.debugRuta.dataset>): void {
+    this.debugRuta = {
+      ...this.debugRuta,
+      dataset: { ...this.debugRuta.dataset, ...updates },
+    };
+    this.cd.markForCheck();
+  }
 
-  this.debugRuta = {
-    ...this.debugRuta,
-    dataset: newDataset,
-  };
+  private debugReset(): void {
+    const now = new Date();
 
-  // Opcional
-  this.cd.markForCheck();
-}
+    this.debugRuta = {
+      ...this.debugRuta,
+      status: 'running',
+      startedAt: now.toISOString(),
+      finishedAt: null,
+      elapsedMs: 0,
 
-// ✅ Reset debug - SIN detectChanges() (evita NG0100)
-private debugReset(): void {
-  const now = new Date();
-
-  this.debugRuta = {
-    status: 'running',
-    startedAt: now.toISOString(),
-    finishedAt: null,
-    elapsedMs: 0,
-
-    input: {
-      modo: this.modoSeleccionado,
-      filters: { ...this.filters },
-      autonomia: {
-        kmDisponibles: Number(this.kmDisponiblesUsuario),
-        reservaMinKm: this.reservaMinKm,
-        kmUsables: Number(this.kmDisponiblesUsuario) - this.reservaMinKm,
-        consumoFijoL100: this.consumoFijoL100,
+      input: {
+        modo: this.modoSeleccionado,
+        filters: { ...this.filters },
+        autonomia: {
+          kmDisponibles: Number(this.kmDisponiblesUsuario),
+          reservaMinKm: this.reservaMinKm,
+          kmUsables: Number(this.kmDisponiblesUsuario) - this.reservaMinKm,
+          consumoFijoL100: this.consumoFijoL100,
+        },
+        origenRaw: { ...this.ubicacionUsuario },
+        destinoRaw: { ...this.destino },
+        origenResolved: null,
+        destinoResolved: null,
+        geocodeProvider: 'nominatim',
       },
-      origenRaw: { ...this.ubicacionUsuario },
-      destinoRaw: { ...this.destino },
-      origenResolved: null,
-      destinoResolved: null,
-      geocodeProvider: this.googleApiKey ? 'google' : 'nominatim',
-    },
 
-    baseRoute: {
-      distBaseKm: 0,
-      durBaseSec: 0,
-      pointsCount: 0,
-      sampleFirstLast: null,
-      polylinePresent: false,
-    },
+      baseRoute: {
+        distBaseKm: 0,
+        durBaseSec: 0,
+        pointsCount: 0,
+        sampleFirstLast: null,
+        polylinePresent: false,
+      },
 
-    dataset: {
-  totalStations: this.gasolineras.length,
-  afterDatasetFilters: 0,
-  radioKm: 0,
+      dataset: {
+        totalStations: this.gasolineras.length,
+        afterDatasetFilters: 0,
+        radioKm: 0,
+        corridorCandidatesTotal: 0,
+        corridorCandidatesEnAutonomia: 0,
+        N: 0,
+        preRankTop: [],
+        topN: [],
+      },
 
-  // ✅ NUEVO
-  corridorCandidatesTotal: 0,
-  corridorCandidatesEnAutonomia: 0,
+      googleCalls: {
+        concurrency: 5,
+        requested: 0,
+        finished: 0,
+        failed: 0,
+        discardedByAutonomy: 0,
+        discardedByDetour: 0,
+        errors: [],
+      },
 
-  N: 0,
-  preRankTop: [],
-  topN: [],
-},
+      enriched: { resultsCount: 0, results: [] },
+      final: { sortedCount: 0, top3: [] },
+      ui: { busquedaEnCurso: this.busquedaEnCurso, mostrarResultados: this.mostrarResultados, error: this.error },
+    };
 
-    googleCalls: {
-      concurrency: 5,
-      requested: 0,
-      finished: 0,
-      failed: 0,
-      discardedByAutonomy: 0,
-      errors: [],
-    },
-
-    enriched: {
-      resultsCount: 0,
-      results: [],
-    },
-
-    final: {
-      sortedCount: 0,
-      top3: [],
-    },
-
-    ui: {
-      busquedaEnCurso: this.busquedaEnCurso,
-      mostrarResultados: this.mostrarResultados,
-      error: this.error,
-    },
-  };
-
-  this.cd.markForCheck();
-}
-
+    this.cd.markForCheck();
+  }
 
   private debugFinish(ok: boolean): void {
     const end = new Date();
@@ -441,12 +480,150 @@ private debugReset(): void {
     });
   }
 
-  formatAddressForUi(g: any): string {
-    const parts = [g?.direccion || g?.direccionCompleta, g?.municipio, g?.provincia].filter(Boolean);
-    if (parts.length) return parts.join(', ');
-    const parts2 = [g?.calle, g?.numero, g?.ciudad, g?.provincia].filter(Boolean);
-    return parts2.join(', ');
+// =========================================================
+// ✅ POLILÍNEA RUTA + MARKERS GASOLINERAS
+// =========================================================
+routePath: google.maps.LatLngLiteral[] = [];
+routePolylineOptions: google.maps.PolylineOptions = {
+  strokeOpacity: 0.9,
+  strokeWeight: 5,
+  clickable: false,
+  geodesic: true
+};
+
+// Markers para gasolineras resultado
+stationMarkers: Array<{
+  position: google.maps.LatLngLiteral;
+  title: string;
+  station: Gasolinera;
+}> = [];
+
+private starIcon(): google.maps.Icon {
+  // SVG inline (estrella). Así no dependes de URLs externas.
+  const svg = encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24">
+      <path fill="#FFD54A" stroke="#111" stroke-width="1"
+        d="M12 2.5l2.9 6.2 6.8.6-5.2 4.5 1.6 6.7L12 17.9 5.9 20.5l1.6-6.7-5.2-4.5 6.8-.6L12 2.5z"/>
+    </svg>
+  `);
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${svg}`,
+    scaledSize: new google.maps.Size(28, 28),
+    anchor: new google.maps.Point(14, 14),
+  };
+}
+
+stationMarkerOptions: google.maps.MarkerOptions = {
+  clickable: true,
+};
+
+private buildStationMarkersFromResults(): void {
+  const list = (this.gasolinerasFiltradas ?? [])
+    .filter(g => Number.isFinite(g.latitud) && Number.isFinite(g.longitud) && g.latitud !== 0 && g.longitud !== 0)
+    // opcional: limitar para no llenar el mapa (ajusta si quieres)
+    .slice(0, 60);
+
+  this.stationMarkers = list.map(g => ({
+    position: { lat: g.latitud, lng: g.longitud },
+    title: g.rotulo || 'Gasolinera',
+    station: g
+  }));
+
+  this.cd.markForCheck();
+}
+
+private clearRouteAndStationsOnMap(): void {
+  this.routePath = [];
+  this.stationMarkers = [];
+  this.cd.markForCheck();
+}
+
+
+
+  // =========================================================
+  // ✅ Actualizar mapa: origen/destino/selección + fitBounds
+  // =========================================================
+  private updateRouteMapMarkers(origen: LatLng | null, destino: LatLng | null): void {
+    if (origen) this.markerOrigen = { lat: origen.lat, lng: origen.lng };
+    if (destino) this.markerDestino = { lat: destino.lat, lng: destino.lng };
+
+    // Center fallback
+    if (origen) {
+      this.mapCenter = { lat: origen.lat, lng: origen.lng };
+      this.mapZoom = 9;
+    }
+
+    this.cd.markForCheck();
+
+    // Fit bounds cuando el mapa ya existe
+    setTimeout(() => this.fitMapToMarkers(), 80);
   }
+
+private fitMapToMarkers(): void {
+  if (!this.googleMap?.googleMap) return;
+
+  const bounds = new google.maps.LatLngBounds();
+  let count = 0;
+
+  const add = (p?: google.maps.LatLngLiteral) => {
+    if (!p) return;
+    bounds.extend(p);
+    count++;
+  };
+
+  // Origen / destino / selección
+  add(this.markerOrigen);
+  add(this.markerDestino);
+  add(this.markerSeleccion);
+
+  // ✅ Ruta (polilínea)
+  if (this.routePath?.length) {
+    // Para no meter 1000 puntos en bounds, muestreamos
+    const step = Math.max(1, Math.floor(this.routePath.length / 60));
+    for (let i = 0; i < this.routePath.length; i += step) {
+      add(this.routePath[i]);
+    }
+    // Asegura último punto
+    add(this.routePath[this.routePath.length - 1]);
+  }
+
+  // ✅ Estrellas (markers de resultados)
+  if (this.stationMarkers?.length) {
+    for (const m of this.stationMarkers.slice(0, 80)) {
+      add(m.position);
+    }
+  }
+
+  if (count === 0) return;
+
+  if (count === 1) {
+    const only = this.markerOrigen || this.markerDestino || this.markerSeleccion || this.routePath?.[0] || this.stationMarkers?.[0]?.position;
+    if (only) {
+      this.googleMap.googleMap.setCenter(only);
+      this.googleMap.googleMap.setZoom(12);
+    }
+    return;
+  }
+
+  this.googleMap.googleMap.fitBounds(bounds, 60);
+}
+
+
+  // Si eliges una gasolinera, ponemos el marcador y reajustamos el mapa
+private setSelectedMarkerFromStation(g: Gasolinera | null, ajustarMapa: boolean = true): void {
+  if (!g) {
+    this.markerSeleccion = undefined;
+    if (ajustarMapa) setTimeout(() => this.fitMapToMarkers(), 50);
+    return;
+  }
+
+  if (Number.isFinite(g.latitud) && Number.isFinite(g.longitud) && g.latitud !== 0 && g.longitud !== 0) {
+    this.markerSeleccion = { lat: g.latitud, lng: g.longitud };
+    if (ajustarMapa) setTimeout(() => this.fitMapToMarkers(), 50);
+  }
+}
+
 
   // ---------------------------
   // LIFECYCLE
@@ -466,7 +643,18 @@ private debugReset(): void {
       this.filtersTemporales.companyMode = 'include';
     }
 
+    // Inicializa marcador de origen si ya hay coords guardadas
+    if (this.ubicacionUsuario.latitud && this.ubicacionUsuario.longitud) {
+      this.markerOrigen = { lat: this.ubicacionUsuario.latitud, lng: this.ubicacionUsuario.longitud };
+      this.mapCenter = { ...this.markerOrigen };
+    }
+
     this.cargarGasolineras();
+
+    this.stationMarkerOptions = {
+    clickable: true,
+    icon: this.starIcon()
+    };
 
     this.setupObservers();
     setTimeout(() => this.checkScrollNeeded(), 100);
@@ -476,15 +664,14 @@ private debugReset(): void {
       gifElement.style.animation = 'rotar 3s ease-out 1';
     }
 
-    // Si DEBUG_UI está activo, añadir intervalo para actualizar tiempo
     if (this.DEBUG_UI) {
-     setInterval(() => {
-    if (this.debugRuta.status === 'running' && this.debugRuta.startedAt) {
-      const now = new Date();
-      const elapsed = now.getTime() - new Date(this.debugRuta.startedAt).getTime();
-      this.updateDebugRuta({ elapsedMs: elapsed });
-      }
-     }, 100);
+      setInterval(() => {
+        if (this.debugRuta.status === 'running' && this.debugRuta.startedAt) {
+          const now = new Date();
+          const elapsed = now.getTime() - new Date(this.debugRuta.startedAt).getTime();
+          this.updateDebugRuta({ elapsedMs: elapsed });
+        }
+      }, 100);
     }
   }
 
@@ -503,34 +690,56 @@ private debugReset(): void {
   // ---------------------------
   // UI / ACCORDEON
   // ---------------------------
-  setModo(modo: 'buscar' | 'ruta'): void {
-    if (this.modoSeleccionado === modo) return;
+setModo(modo: 'buscar' | 'ruta'): void {
+  if (this.modoSeleccionado === modo) return;
 
-    this.modoSeleccionado = modo;
+  this.modoSeleccionado = modo;
 
-    if (modo === 'ruta') {
-      this.destino = {
-        latitud: 0,
-        longitud: 0,
-        calle: '',
-        numero: '',
-        ciudad: '',
-        provincia: '',
-        direccionCompleta: '',
-      };
-    } else {
-      this.acordeonAbierto.destino = false;
-    }
+  if (modo === 'ruta') {
+    // Reset destino + marcador destino (pero NO borramos origen)
+    this.destino = {
+      latitud: 0,
+      longitud: 0,
+      calle: '',
+      numero: '',
+      ciudad: '',
+      provincia: '',
+      direccionCompleta: '',
+    };
+    this.markerDestino = undefined;
 
-    setTimeout(() => this.checkScrollNeeded(), 100);
+    // ✅ En modo ruta, limpiamos selección previa y marcadores de resultados anteriores
+    this.markerSeleccion = undefined;
+    this.stationMarkers = [];
+    // La ruta se pintará cuando ejecutes búsqueda en ruta (routePath se setea al obtener la ruta base)
+    this.routePath = [];
+
+    setTimeout(() => this.fitMapToMarkers(), 80);
+  } else {
+    // Volvemos a modo buscar
+    this.acordeonAbierto.destino = false;
+
+    // ✅ Quitamos destino, selección y la polilínea de ruta
+    this.markerDestino = undefined;
+    this.markerSeleccion = undefined;
+    this.routePath = [];
+
+    // ✅ (Opcional pero recomendado) también limpiamos estrellas de resultados anteriores
+    // Si luego haces una búsqueda en modo buscar, se volverán a crear con buildStationMarkersFromResults()
+    this.stationMarkers = [];
+
+    setTimeout(() => this.fitMapToMarkers(), 80);
   }
+
+  setTimeout(() => this.checkScrollNeeded(), 100);
+}
+
 
   toggleAcordeon(seccion: keyof typeof this.acordeonAbierto): void {
     this.acordeonAbierto[seccion] = !this.acordeonAbierto[seccion];
     setTimeout(() => this.checkScrollNeeded(), 350);
   }
 
-  // Añade este método nuevo para el debug panel
   toggleDebugSection(section: keyof typeof this.debugSections): void {
     this.debugSections[section] = !this.debugSections[section];
   }
@@ -589,6 +798,12 @@ private debugReset(): void {
         };
 
         this.storageService.guardarUbicacion(this.ubicacionUsuario);
+
+        // ✅ Actualiza marcador de origen
+        this.markerOrigen = { lat: this.ubicacionUsuario.latitud, lng: this.ubicacionUsuario.longitud };
+        this.mapCenter = { ...this.markerOrigen };
+        this.mapZoom = 11;
+        setTimeout(() => this.fitMapToMarkers(), 80);
       })
       .catch((error) => {
         alert(`Error obteniendo ubicación: ${error.message}`);
@@ -609,25 +824,21 @@ private debugReset(): void {
       return;
     }
 
-    // ✅ VERIFICACIÓN CRÍTICA: asegurar que tenemos gasolineras cargadas
     if (this.gasolineras.length === 0) {
       this.error = 'Cargando gasolineras...';
       this.busquedaEnCurso = true;
 
-      // Esperar a que se carguen las gasolineras
       try {
         await new Promise<void>((resolve, reject) => {
           if (this.gasolineras.length > 0) {
             resolve();
           } else {
-            // Crear un observador para esperar la carga
             let attempts = 0;
-            const maxAttempts = 100; // 100 * 100ms = 10 segundos
+            const maxAttempts = 100;
 
             const checkInterval = setInterval(() => {
               attempts++;
               if (this.gasolineras.length > 0) {
-                console.log(`✅ Gasolineras cargadas después de ${attempts} intentos: ${this.gasolineras.length}`);
                 clearInterval(checkInterval);
                 resolve();
               } else if (attempts >= maxAttempts) {
@@ -638,7 +849,7 @@ private debugReset(): void {
           }
         });
 
-        this.error = null; // Limpiar mensaje de error si tuvo éxito
+        this.error = null;
       } catch (e: any) {
         this.error = e?.message ?? 'Error al cargar las gasolineras. Intenta recargar la página.';
         this.busquedaEnCurso = false;
@@ -658,6 +869,9 @@ private debugReset(): void {
       }
 
       this.mostrarResultados = true;
+
+      // ✅ Marcar gasolineras resultado con estrella
+      this.buildStationMarkersFromResults();
 
       if (this.gasolinerasFiltradas.length > 0) {
         this.acordeonAbierto.resultados = true;
@@ -680,6 +894,13 @@ private debugReset(): void {
 
   private ejecutarBusquedaLocal(): void {
     this.aplicarFilters();
+    // En modo buscar, si hay origen, intentamos que el mapa lo refleje
+    if (this.ubicacionUsuario.latitud && this.ubicacionUsuario.longitud) {
+      this.markerOrigen = { lat: this.ubicacionUsuario.latitud, lng: this.ubicacionUsuario.longitud };
+      this.mapCenter = { ...this.markerOrigen };
+      this.mapZoom = 11;
+      setTimeout(() => this.fitMapToMarkers(), 80);
+    }
   }
 
   // ---------------------------
@@ -724,10 +945,9 @@ private debugReset(): void {
   aplicarFilters(): void {
     if (!this.gasolineras.length) return;
 
-    // ✅ parte de todo el dataset
     this.gasolinerasFiltradas = [...this.gasolineras];
 
-    // ✅ autonomía en modo buscar: si es 0 => ilimitado (no filtra)
+    // ✅ Autonomía en modo buscar: si es 0 => ilimitada (no filtra)
     if (this.kmDisponiblesUsuario > 0) {
       this.gasolinerasFiltradas = this.gasolinerasFiltradas.filter((gasolinera) => {
         const distanciaKm = this.gasolineraService.calcularDistancia(
@@ -744,9 +964,7 @@ private debugReset(): void {
     setTimeout(() => this.checkScrollNeeded(), 100);
   }
 
-  // ✅ FIX: aquí antes estaba roto (g.distanceKm = length)
   ordenarGasolineras(): void {
-    // ✅ Calcula distancia REAL desde la ubicación actual (solo modo buscar)
     this.gasolinerasFiltradas.forEach((g) => {
       g.distanceKm = this.gasolineraService.calcularDistancia(
         this.ubicacionUsuario.latitud,
@@ -799,11 +1017,15 @@ private debugReset(): void {
     this.filtersTemporales = nuevosFilters;
   }
 
-  onGasolineraSeleccionada(g: Gasolinera): void {
-    this.gasolineraSeleccionada = g;
-    this.acordeonAbierto.detalles = true;
-    setTimeout(() => this.checkScrollNeeded(), 100);
-  }
+onGasolineraSeleccionada(g: Gasolinera, ajustarMapa: boolean = true): void {
+  this.gasolineraSeleccionada = g;
+  this.acordeonAbierto.detalles = true;
+
+  // ✅ marcador “selección”
+  this.setSelectedMarkerFromStation(g);
+
+  setTimeout(() => this.checkScrollNeeded(), 100);
+}
 
   // ---------------------------
   // RESET
@@ -853,6 +1075,13 @@ private debugReset(): void {
     this.mostrarResultados = false;
     this.gasolinerasFiltradas = [];
 
+    // ✅ limpiar mapa
+    this.markerOrigen = undefined;
+    this.markerDestino = undefined;
+    this.markerSeleccion = undefined;
+    this.mapCenter = { lat: 40.4168, lng: -3.7038 };
+    this.mapZoom = 6;
+
     this.storageService.guardarUbicacion(this.ubicacionUsuario);
     this.storageService.guardarFiltros(this.filters);
 
@@ -878,29 +1107,23 @@ private debugReset(): void {
   }
 
   // =========================================================
-  // ✅ MODO RUTA (CUBOS + AUTONOMÍA ANTES DEL DESVÍO REAL)
+  // ✅ MODO RUTA
+  //   - Autonomía: limita “leg1Km” (origen -> gasolinera)
+  //   - Slider maxDistance: limita “extraKmReal” (desvío real total)
+  //   - distanceKm YA NO se usa para desvío (evita el “161 km”)
   // =========================================================
-  // Opción 1: la autonomía valida SOLO “llegar desde el origen a la gasolinera”.
-  // Si autonomía es 0 => ilimitada (recorre toda la ruta).
   private async ejecutarBusquedaEnRuta(): Promise<void> {
     this.debugReset();
 
     let ok = false;
 
-    // ✅ muestras descartadas por autonomía (leg1)
-    let discardsAutonomy = 0;
-    const discardSamples: Array<{ rotulo: string; leg1Km: number; kmUsables: number }> = [];
-
     try {
-      // ✅ VERIFICACIÓN CRÍTICA: asegurar que tenemos datos
       if (!this.gasolineras || this.gasolineras.length === 0) {
         throw new Error('No hay gasolineras cargadas. Por favor, intenta de nuevo.');
       }
 
-      // ✅ Total stations al inicio
       this.updateDebugDataset({ totalStations: this.gasolineras.length } as any);
 
-      // ✅ Autonomía (si está vacía o <=0 => ILIMITADA)
       const kmDisponibles = Number(this.kmDisponiblesUsuario);
       const autonomiaIlimitada = !Number.isFinite(kmDisponibles) || kmDisponibles <= 0;
 
@@ -912,7 +1135,10 @@ private debugReset(): void {
         );
       }
 
-      // ✅ reflejar autonomía real en debug
+      // ✅ Desvío máximo (slider)
+      const maxDesvioKm = Number(this.filters.maxDistance);
+      const hasMaxDesvio = Number.isFinite(maxDesvioKm) && maxDesvioKm > 0;
+
       this.updateDebugRuta({
         input: {
           ...this.debugRuta.input,
@@ -926,11 +1152,10 @@ private debugReset(): void {
           },
           origenRaw: { ...this.ubicacionUsuario },
           destinoRaw: { ...this.destino },
-          geocodeProvider: this.googleApiKey ? 'google' : 'nominatim',
+          geocodeProvider: 'nominatim',
         },
       });
 
-      // ✅ resolver coordenadas
       const origen = await this.resolveLatLngFromUbicacion(this.ubicacionUsuario);
       const destino = await this.resolveLatLngFromUbicacion(this.destino);
 
@@ -939,12 +1164,18 @@ private debugReset(): void {
           ...this.debugRuta.input,
           origenResolved: origen,
           destinoResolved: destino,
-          geocodeProvider: this.googleApiKey ? 'google' : 'nominatim',
+          geocodeProvider: 'nominatim',
         },
       });
 
-      // ✅ ruta base
+      // ✅ actualizar mapa: origen/destino + fitBounds
+      this.updateRouteMapMarkers(origen, destino);
+
       const base = await this.getRouteBase(origen, destino);
+
+      // ✅ Pintar ruta (polyline) en el mapa
+      this.routePath = (base.points ?? []).map(p => ({ lat: p.lat, lng: p.lng }));
+      this.cd.markForCheck();
 
       this.updateDebugRuta({
         baseRoute: {
@@ -956,9 +1187,10 @@ private debugReset(): void {
         },
       });
 
-      // ✅ filtro dataset (sin distancia circular)
       const filtradasPorDataset = this.filtrarDatasetSinDistanciaCircular(this.gasolineras, this.filters);
-      const radioKm = this.filters.maxDistance;
+
+      // ✅ Radio del corredor: fijo, NO el slider
+      const radioKm = this.corridorRadiusKm;
 
       this.updateDebugDataset({
         afterDatasetFilters: filtradasPorDataset.length,
@@ -971,15 +1203,12 @@ private debugReset(): void {
         return;
       }
 
-      // ✅ corredor
       const candidatasCorredor = this.filtrarPorCorredorRuta(filtradasPorDataset, base.points, radioKm);
 
-      // ✅ Debug: total en corredor (ANTES de autonomía)
       this.updateDebugDataset({
-       corridorCandidatesTotal: candidatasCorredor.length,
+        corridorCandidatesTotal: candidatasCorredor.length,
       });
 
-      // ✅ autonomía ANTES de nada caro (solo “leg1” aproximado = haversine origen->gas)
       let candidatasAutonomia = candidatasCorredor;
       if (!autonomiaIlimitada) {
         candidatasAutonomia = candidatasCorredor.filter((g) => {
@@ -988,19 +1217,15 @@ private debugReset(): void {
         });
       }
 
-      // ✅ Debug: en autonomía (DESPUÉS de autonomía)
       this.updateDebugDataset({
-      corridorCandidatesEnAutonomia: candidatasAutonomia.length,
+        corridorCandidatesEnAutonomia: candidatasAutonomia.length,
       });
 
-      // ✅ pre-rank (asigna _minDistToRouteKm)
       const preRank = this.preRankCandidates(candidatasAutonomia, base.points, this.filters);
 
-      // ✅ intervalKm dinámico + límite visible por autonomía
       const intervalKm = this.computeIntervalKm(base.distBaseKm, kmUsables, autonomiaIlimitada);
       const maxKmVisible = autonomiaIlimitada ? base.distBaseKm : Math.min(kmUsables, base.distBaseKm);
 
-      // ✅ construir cubos (guardamos top 6 por cubo como “reservas”)
       type BucketItem = { g: Gasolinera; kmFromOrigin: number };
       const bucketMap = new Map<number, BucketItem[]>();
 
@@ -1017,49 +1242,42 @@ private debugReset(): void {
 
       for (const [b, arr] of bucketMap.entries()) {
         arr.sort((x, y) => this.compareBySort(x.g, y.g, this.filters));
-        bucketMap.set(b, arr.slice(0, 6)); // reservas por cubo
+        bucketMap.set(b, arr.slice(0, 6));
       }
 
       const bucketsSorted = Array.from(bucketMap.keys()).sort((a, b) => a - b);
 
-      // ✅ Debug dataset: N = número de cubos (dinámico), topN = muestra de primeras reservas
       const firstBucketPreview = bucketsSorted.length ? bucketMap.get(bucketsSorted[0]) ?? [] : [];
-      
+
       this.updateDebugDataset({
-  // ✅ ya se guardaron antes:
-  // corridorCandidatesTotal
-  // corridorCandidatesEnAutonomia
+        N: bucketsSorted.length,
+        preRankTop: preRank.slice(0, 10).map((g: any) => ({
+          rotulo: g.rotulo,
+          minDistRuta: (g as any)._minDistToRouteKm,
+          precio: this.getPrecioLitroSegunFiltro(g, this.filters.fuelType),
+        })),
+        topN: firstBucketPreview.slice(0, 10).map((x: any) => ({
+          rotulo: x.g.rotulo,
+          minDistRuta: (x.g as any)._minDistToRouteKm,
+          precio: this.getPrecioLitroSegunFiltro(x.g, this.filters.fuelType),
+        })),
+      });
 
-  N: bucketsSorted.length, // número de cubos
-  preRankTop: preRank.slice(0, 10).map((g: any) => ({
-    rotulo: g.rotulo,
-    minDistRuta: (g as any)._minDistToRouteKm,
-    precio: this.getPrecioLitroSegunFiltro(g, this.filters.fuelType),
-  })),
-  topN: firstBucketPreview.slice(0, 10).map((x: any) => ({
-    rotulo: x.g.rotulo,
-    minDistRuta: (x.g as any)._minDistToRouteKm,
-    precio: this.getPrecioLitroSegunFiltro(x.g, this.filters.fuelType),
-  })),
-});
-
-
-      // ✅ reset googleCalls/enriched/final
       this.updateDebugRuta({
         googleCalls: {
           ...this.debugRuta.googleCalls,
-          concurrency: 1, // por cubo intentamos en serie para poder sustituir
+          concurrency: 1,
           requested: 0,
           finished: 0,
           failed: 0,
           discardedByAutonomy: 0,
+          discardedByDetour: 0,
           errors: [],
         },
         enriched: { ...this.debugRuta.enriched, results: [], resultsCount: 0 },
         final: { ...this.debugRuta.final, sortedCount: 0, top3: [] },
       });
 
-      // ✅ si no hay cubos => no hay resultados
       if (bucketsSorted.length === 0) {
         this.gasolinerasFiltradas = [];
         this.error = autonomiaIlimitada
@@ -1069,7 +1287,6 @@ private debugReset(): void {
         return;
       }
 
-      // ✅ Selección final: 2 por cubo, sustituyendo si falla
       const finalSelected: Gasolinera[] = [];
       const enrichedRows: any[] = [];
 
@@ -1081,7 +1298,9 @@ private debugReset(): void {
           const g = candidates[i].g;
           const stop = { lat: g.latitud, lng: g.longitud };
 
-          // ✅ requested++
+          // ✅ siempre guardamos kmFromOrigin en el objeto (para SummaryBox)
+          (g as any)._kmFromOrigin = candidates[i].kmFromOrigin;
+
           this.updateDebugRuta({
             googleCalls: {
               ...this.debugRuta.googleCalls,
@@ -1095,23 +1314,27 @@ private debugReset(): void {
             const leg1Km = info.distToGasKm;
             const extraKmReal = Math.max(0, info.distConParadaKm - base.distBaseKm);
 
-            // ✅ autonomía opción 1: SOLO leg1 real
+            // ✅ Autonomía SOLO valida el “primer tramo” (origen->gasolinera)
             if (!autonomiaIlimitada && leg1Km > kmUsables) {
-              discardsAutonomy++;
-              if (discardSamples.length < 3) discardSamples.push({ rotulo: g.rotulo, leg1Km, kmUsables });
-
               this.updateDebugRuta({
                 googleCalls: {
                   ...this.debugRuta.googleCalls,
                   discardedByAutonomy: (this.debugRuta.googleCalls.discardedByAutonomy || 0) + 1,
                 },
               });
-
-              continue; // probar siguiente del cubo
+              continue;
             }
 
-            // ✅ sanity
-            if (!Number.isFinite(extraKmReal) || extraKmReal < 0) {
+            if (!Number.isFinite(extraKmReal) || extraKmReal < 0) continue;
+
+            // ✅ Slider maxDistance = DESVÍO MÁXIMO (extraKmReal)
+            if (hasMaxDesvio && extraKmReal > maxDesvioKm) {
+              this.updateDebugRuta({
+                googleCalls: {
+                  ...this.debugRuta.googleCalls,
+                  discardedByDetour: (this.debugRuta.googleCalls.discardedByDetour || 0) + 1,
+                },
+              });
               continue;
             }
 
@@ -1128,16 +1351,16 @@ private debugReset(): void {
             };
 
             g.routeInfo = finalInfo;
-            g.distanceKm = finalInfo.extraKmReal;
 
-            // ✅ etiqueta km desde origen (para UI)
-            (g as any)._kmFromOrigin = candidates[i].kmFromOrigin;
+            // ✅ Si quieres que “distanceKm” tenga un significado en modo ruta:
+            g.distanceKm = (g as any)._kmFromOrigin;
 
             finalSelected.push(g);
 
             enrichedRows.push({
               bucket: b,
               rotulo: g.rotulo,
+              direccion: this.formatAddress(g),
               kmFromOrigin: Number((candidates[i].kmFromOrigin ?? 0).toFixed(2)),
               precioLitro,
               distToGasKm: Number((info.distToGasKm ?? 0).toFixed(2)),
@@ -1148,7 +1371,6 @@ private debugReset(): void {
               minDistToRouteKm: Number(((g as any)._minDistToRouteKm ?? 0).toFixed(2)),
             });
 
-            // ✅ finished++
             this.updateDebugRuta({
               googleCalls: {
                 ...this.debugRuta.googleCalls,
@@ -1189,23 +1411,9 @@ private debugReset(): void {
         }
       }
 
-      // ✅ resumen autonomía
-      console.log(`⛽ Autonomía (opción 1): descartadas por leg1 = ${discardsAutonomy}`);
-      if (discardSamples.length) {
-        console.log(
-          '📌 Ejemplos descartados (máx 3):',
-          discardSamples.map((x) => ({
-            rotulo: x.rotulo,
-            leg1Km: Number(x.leg1Km.toFixed(2)),
-            kmUsables: x.kmUsables,
-          }))
-        );
-      }
-
-      // ✅ Orden final respetando sortBy (tu punto 14)
+      // ✅ Orden final (price o “distancia a ruta” según filtro)
       finalSelected.sort((a, b) => this.compareBySort(a, b, this.filters));
 
-      // ✅ si no hay resultados
       if (finalSelected.length === 0) {
         this.gasolinerasFiltradas = [];
         this.error = autonomiaIlimitada
@@ -1215,7 +1423,6 @@ private debugReset(): void {
         return;
       }
 
-      // ✅ debug final/top3 (solo preview)
       const top3 = finalSelected.slice(0, 3);
       this.updateDebugRuta({
         final: {
@@ -1230,11 +1437,7 @@ private debugReset(): void {
         },
       });
 
-      // ✅ resultados UI: “sin límite”, depende de cubos
       this.gasolinerasFiltradas = finalSelected;
-
-      console.log(`✅ Búsqueda en ruta completada. Mostrando: ${finalSelected.length} (2 por cubo, dentro de autonomía)`);
-
       ok = true;
     } catch (e: any) {
       console.error('❌ Error en ejecutarBusquedaEnRuta:', e);
@@ -1249,24 +1452,17 @@ private debugReset(): void {
   // ---------------------------
   // Dataset filtering (ruta)
   // ---------------------------
-
   private filtrarDatasetSinDistanciaCircular(gasolineras: Gasolinera[], filtros: Filters): Gasolinera[] {
     return gasolineras.filter((g) => {
-      // 1. Verificar combustible y precio
       if (!this.tieneCombustibleYPrecioOK(g, filtros)) return false;
 
-      // 2. Verificar empresas (solo si hay empresas seleccionadas)
       if (filtros.companies && filtros.companies.length > 0) {
         const pertenece = filtros.companies.some((empresa) => this.companyNormalizer.belongsToCompany(g.rotulo, empresa));
 
-        // Modo "include": debe pertenecer a alguna de las empresas seleccionadas
         if (filtros.companyMode === 'include' && !pertenece) return false;
-
-        // Modo "exclude": NO debe pertenecer a ninguna de las empresas seleccionadas
         if (filtros.companyMode === 'exclude' && pertenece) return false;
       }
 
-      // 3. Verificar horario
       if (filtros.onlyOpen) {
         if (!this.estaAbiertaRudimentario(g.horario || '')) return false;
       }
@@ -1335,15 +1531,9 @@ private debugReset(): void {
   // Corredor de ruta
   // ---------------------------
   private filtrarPorCorredorRuta(gasolineras: Gasolinera[], routePoints: LatLng[], radioKm: number): Gasolinera[] {
-    console.log('🛣️ filtrarPorCorredorRuta: puntos de ruta:', routePoints?.length || 0, 'gasolineras:', gasolineras.length);
-
-    if (!routePoints || routePoints.length === 0) {
-      console.warn('⚠️ No hay puntos de ruta para filtrar por corredor');
-      return [];
-    }
+    if (!routePoints || routePoints.length === 0) return [];
 
     if (routePoints.length === 1) {
-      // Si solo hay un punto (origen=destino), filtrar por distancia directa
       const punto = routePoints[0];
       return gasolineras.filter((g) => {
         const distancia = haversineKm(punto.lat, punto.lng, g.latitud, g.longitud);
@@ -1352,56 +1542,23 @@ private debugReset(): void {
     }
 
     const sampled = this.sampleRoutePoints(routePoints, 1.5);
-    console.log('🛣️ Puntos muestreados:', sampled.length);
 
-    const resultado = gasolineras.filter((g) => {
+    return gasolineras.filter((g) => {
       const p: LatLng = { lat: g.latitud, lng: g.longitud };
       const d = this.minDistancePointToPolylineKm(p, sampled);
-      const dentro = d <= radioKm;
-
-      // Debug para las primeras 5 gasolineras
-      if (g === gasolineras[0]) {
-        console.log('🔍 Ejemplo distancia:', {
-          rótulo: g.rotulo,
-          distancia: d.toFixed(2),
-          radioKm,
-          dentro,
-        });
-      }
-
-      return dentro;
+      return d <= radioKm;
     });
-
-    console.log('🛣️ Gasolineras en corredor:', resultado.length);
-    return resultado;
   }
 
   private preRankCandidates(candidates: Gasolinera[], routePoints: LatLng[], filtros: Filters): Gasolinera[] {
-    if (!candidates || candidates.length === 0) {
-      console.log('📊 preRankCandidates: sin candidatos');
-      return [];
-    }
-
-    console.log('📊 preRankCandidates: procesando', candidates.length, 'candidatos');
+    if (!candidates || candidates.length === 0) return [];
 
     const sampled = this.sampleRoutePoints(routePoints, 1.5);
 
     const withMetric = candidates.map((g) => {
       const p = { lat: g.latitud, lng: g.longitud };
       const minDist = this.minDistancePointToPolylineKm(p, sampled);
-
-      // ✅ Asegurar que la propiedad se asigna correctamente
       (g as any)._minDistToRouteKm = minDist;
-
-      // Debug para las primeras 3
-      if (candidates.indexOf(g) < 3) {
-        console.log('📊 preRank ejemplo:', {
-          rótulo: g.rotulo,
-          minDistToRouteKm: minDist.toFixed(2),
-          precio: this.getPrecioLitroSegunFiltro(g, filtros.fuelType),
-        });
-      }
-
       return g;
     });
 
@@ -1423,7 +1580,6 @@ private debugReset(): void {
       });
     }
 
-    console.log('📊 preRankCandidates: ordenados', withMetric.length);
     return withMetric;
   }
 
@@ -1450,7 +1606,6 @@ private debugReset(): void {
       out.push(points[points.length - 1]);
     }
 
-    console.log('📊 sampleRoutePoints: entrada', points.length, 'salida', out.length);
     return out;
   }
 
@@ -1507,9 +1662,12 @@ private debugReset(): void {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  // ---------------------------
-  // Geocoding + Routes (Google / fallback)
-  // ---------------------------
+  // =========================================================
+  // ✅ Geocoding + Routes
+  //   - Geocoding: SIEMPRE Nominatim
+  //   - Routes: GoogleRoutesService si hay key (con fallback)
+  // =========================================================
+
   private async resolveLatLngFromUbicacion(u: Ubicacion): Promise<LatLng> {
     if (Number.isFinite(u.latitud) && Number.isFinite(u.longitud) && u.latitud !== 0 && u.longitud !== 0) {
       return { lat: u.latitud, lng: u.longitud };
@@ -1518,37 +1676,34 @@ private debugReset(): void {
     const texto = this.formatAddress(u);
     if (!texto.trim()) throw new Error('Dirección inválida para geocodificar.');
 
-    if (this.googleApiKey) {
-      return await this.googleGeocode(texto);
+    try {
+      const r = await this.nominatimGeocode(texto);
+      if (!r || !Number.isFinite(r.lat) || !Number.isFinite(r.lng) || (r.lat === 0 && r.lng === 0)) {
+        throw new Error('Nominatim no devolvió coordenadas válidas.');
+      }
+      return r;
+    } catch (e: any) {
+      console.warn('⚠️ Nominatim Geocoding falló:', {
+        address: texto,
+        msg: e?.message ?? String(e),
+      });
+      throw e;
     }
-
-    return await this.nominatimGeocode(texto);
   }
 
   private formatAddress(u: Ubicacion): string {
+    const full = (u.direccionCompleta || '').trim();
+    if (full) return full;
+
     const parts = [u.calle, u.numero, u.ciudad, u.provincia].filter(Boolean);
     return parts.join(', ');
-  }
-
-  private async googleGeocode(address: string): Promise<LatLng> {
-    const url =
-      'https://maps.googleapis.com/maps/api/geocode/json?address=' +
-      encodeURIComponent(address) +
-      '&key=' +
-      encodeURIComponent(this.googleApiKey);
-
-    const res: any = await this.http.get(url).toPromise();
-    const loc = res?.results?.[0]?.geometry?.location;
-    if (!loc) throw new Error('No se pudo geocodificar la dirección (Google).');
-
-    return { lat: loc.lat, lng: loc.lng };
   }
 
   private async nominatimGeocode(address: string): Promise<LatLng> {
     const url =
       'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(address);
 
-    const res: any = await this.http.get(url).toPromise();
+    const res: any = await firstValueFrom(this.http.get(url));
     const item = res?.[0];
     if (!item) throw new Error('No se pudo geocodificar la dirección (Nominatim).');
 
@@ -1556,54 +1711,26 @@ private debugReset(): void {
   }
 
   private async getRouteBase(origen: LatLng, destino: LatLng): Promise<RouteBaseInfo> {
-    // ✅ Fallback SIN Google: ruta simple origen->destino
-    if (!this.googleApiKey) {
+    if (!this.hasGoogleKey) {
       const dist = haversineKm(origen.lat, origen.lng, destino.lat, destino.lng);
-      const points = [origen, destino];
-
-      console.log('[getRouteBase] fallback SIN Google', { distBaseKm: dist, pointsCount: points.length, origen, destino });
-
-      return {
-        distBaseKm: dist,
-        durBaseSec: 0,
-        polyline: '',
-        points,
-      };
+      return { distBaseKm: dist, durBaseSec: 0, polyline: '', points: [origen, destino] };
     }
 
-    // ✅ Con Google Routes
-    const body = {
-      origin: { location: { latLng: { latitude: origen.lat, longitude: origen.lng } } },
-      destination: { location: { latLng: { latitude: destino.lat, longitude: destino.lng } } },
-      travelMode: 'DRIVE',
-      routingPreference: 'TRAFFIC_UNAWARE',
-      computeAlternativeRoutes: false,
-      routeModifiers: { avoidTolls: false, avoidHighways: false, avoidFerries: false },
-      languageCode: 'es-ES',
-      units: 'METRIC',
-    };
-
-    const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': this.googleApiKey,
-      'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline',
-    };
-
-    const res: any = await this.http.post(url, body, { headers }).toPromise();
-
-    const route = res?.routes?.[0];
-    if (!route) throw new Error('No se pudo calcular la ruta base (Google Routes).');
-
-    const distBaseKm = (route.distanceMeters || 0) / 1000;
-    const durBaseSec = this.parseGoogleDurationSeconds(route.duration);
-    const polyline = route.polyline?.encodedPolyline || '';
-    const points = polyline ? this.decodePolyline(polyline) : [origen, destino];
-
-    console.log('[getRouteBase] Google', { distBaseKm, pointsCount: points.length, polylinePresent: !!polyline });
-
-    return { distBaseKm, durBaseSec, polyline, points };
+    try {
+      const r = await this.googleRoutes.computeRoute(origen as any, destino as any);
+      const polyline = r.polyline || '';
+      const points = polyline ? this.decodePolyline(polyline) : [origen, destino];
+      return {
+        distBaseKm: r.distanceKm || 0,
+        durBaseSec: r.durationSec || 0,
+        polyline,
+        points,
+      };
+    } catch (e: any) {
+      console.warn('⚠️ Google Routes (ruta base) falló. Fallback a haversine.', e?.message ?? e);
+      const dist = haversineKm(origen.lat, origen.lng, destino.lat, destino.lng);
+      return { distBaseKm: dist, durBaseSec: 0, polyline: '', points: [origen, destino] };
+    }
   }
 
   private async getRouteWithStop(
@@ -1611,59 +1738,27 @@ private debugReset(): void {
     stop: LatLng,
     destino: LatLng
   ): Promise<{ distToGasKm: number; distFromGasKm: number; distConParadaKm: number }> {
-    console.log('🔍 getRouteWithStop llamado:', {
-      origen,
-      stop,
-      destino,
-    });
-
-    if (!this.googleApiKey) {
+    if (!this.hasGoogleKey) {
       const distTo = haversineKm(origen.lat, origen.lng, stop.lat, stop.lng);
       const distFrom = haversineKm(stop.lat, stop.lng, destino.lat, destino.lng);
-      const distTot = distTo + distFrom;
-      return { distToGasKm: distTo, distFromGasKm: distFrom, distConParadaKm: distTot };
+      return { distToGasKm: distTo, distFromGasKm: distFrom, distConParadaKm: distTo + distFrom };
     }
 
-    const body = {
-      origin: { location: { latLng: { latitude: origen.lat, longitude: origen.lng } } },
-      destination: { location: { latLng: { latitude: destino.lat, longitude: destino.lng } } },
-      intermediates: [{ location: { latLng: { latitude: stop.lat, longitude: stop.lng } } }],
-      travelMode: 'DRIVE',
-      routingPreference: 'TRAFFIC_UNAWARE',
-      computeAlternativeRoutes: false,
-      languageCode: 'es-ES',
-      units: 'METRIC',
-    };
+    try {
+      const r = await this.googleRoutes.computeRoute(origen as any, destino as any, stop as any);
+      const distConParadaKm = r.distanceKm || 0;
 
-    const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+      const approxLeg1 = haversineKm(origen.lat, origen.lng, stop.lat, stop.lng);
+      const distToGasKm = Number.isFinite(r.leg1DistanceKm) ? (r.leg1DistanceKm as number) : approxLeg1;
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': this.googleApiKey,
-      'X-Goog-FieldMask': 'routes.distanceMeters,routes.legs.distanceMeters',
-    };
-
-    const res: any = await this.http.post(url, body, { headers }).toPromise();
-    const route = res?.routes?.[0];
-    if (!route) throw new Error('No se pudo calcular la ruta con parada (Google Routes).');
-
-    const legs = route.legs || [];
-    const leg1 = legs[0];
-    const leg2 = legs[1];
-
-    const distToGasKm = ((leg1?.distanceMeters || 0) / 1000) || 0;
-    const distFromGasKm = ((leg2?.distanceMeters || 0) / 1000) || 0;
-    const distConParadaKm = ((route.distanceMeters || 0) / 1000) || 0;
-
-    return { distToGasKm, distFromGasKm, distConParadaKm };
-  }
-
-  private parseGoogleDurationSeconds(duration: any): number {
-    if (typeof duration === 'string' && duration.endsWith('s')) {
-      const n = Number(duration.replace('s', ''));
-      return Number.isFinite(n) ? n : 0;
+      const distFromGasKm = Math.max(0, distConParadaKm - distToGasKm);
+      return { distToGasKm, distFromGasKm, distConParadaKm };
+    } catch (e: any) {
+      console.warn('⚠️ Google Routes (con parada) falló. Fallback a haversine.', e?.message ?? e);
+      const distTo = haversineKm(origen.lat, origen.lng, stop.lat, stop.lng);
+      const distFrom = haversineKm(stop.lat, stop.lng, destino.lat, destino.lng);
+      return { distToGasKm: distTo, distFromGasKm: distFrom, distConParadaKm: distTo + distFrom };
     }
-    return 0;
   }
 
   private decodePolyline(encoded: string): LatLng[] {
@@ -1705,38 +1800,19 @@ private debugReset(): void {
     return points;
   }
 
-  // ---------------------------
+  // =========================================================
   // Helpers
-  // ---------------------------
+  // =========================================================
   private clamp(n: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, n));
   }
 
-  private async mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
-    const results: R[] = new Array(items.length) as any;
-    let i = 0;
-
-    const workers = Array.from({ length: Math.max(1, concurrency) }).map(async () => {
-      while (i < items.length) {
-        const idx = i++;
-        results[idx] = await fn(items[idx], idx);
-      }
-    });
-
-    await Promise.all(workers);
-    return results;
-  }
-
-  // =========================================================
-  // ✅ NUEVOS HELPERS (CUBOS)
-  // =========================================================
   private estimateKmAlongSegment(origen: LatLng, destino: LatLng, p: LatLng): number {
-    // Proyección en un plano local (km). Aproximado pero estable.
     const R = 6371;
     const lat0 = (origen.lat * Math.PI) / 180;
 
-    const x = (lng: number) => ((lng * Math.PI) / 180) * Math.cos(lat0) * R;
-    const y = (lat: number) => ((lat * Math.PI) / 180) * R;
+    const x = (lng: number) => (((lng * Math.PI) / 180) * Math.cos(lat0) * R);
+    const y = (lat: number) => (((lat * Math.PI) / 180) * R);
 
     const ax = x(origen.lng),
       ay = y(origen.lat);
@@ -1773,7 +1849,7 @@ private debugReset(): void {
     return interval;
   }
 
-  private compareBySort(a: Gasolinera, b: Gasolinera, filtros: Filters): number {
+private compareBySort(a: Gasolinera, b: Gasolinera, filtros: Filters): number {
     const pa = this.getPrecioLitroSegunFiltro(a, filtros.fuelType);
     const pb = this.getPrecioLitroSegunFiltro(b, filtros.fuelType);
     const da = (a as any)._minDistToRouteKm ?? 999999;
@@ -1788,3 +1864,4 @@ private debugReset(): void {
     }
   }
 }
+

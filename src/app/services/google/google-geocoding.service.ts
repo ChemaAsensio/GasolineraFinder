@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -15,14 +15,28 @@ export class GoogleGeocodingService {
   constructor(private http: HttpClient) {}
 
   async geocodeAddress(address: string): Promise<LatLng> {
-    const url = `${this.baseUrl}?address=${encodeURIComponent(address)}&key=${environment.googleMapsApiKey}`;
+  const url = `${this.baseUrl}?address=${encodeURIComponent(address)}&key=${encodeURIComponent(environment.googleMapsApiKey)}&language=es&region=es&components=country:ES`;
 
+  try {
     const res = await firstValueFrom(this.http.get<any>(url));
-    if (!res?.results?.length) {
-      throw new Error('No se pudo geocodificar la dirección.');
+
+    if (!res) throw new Error('Respuesta vacía de Geocoding.');
+    if (res.status !== 'OK' || !res.results?.length) {
+      const msg = res.error_message || `status=${res.status}`;
+      throw new Error(`Geocoding: ${msg}`);
     }
 
     const loc = res.results[0].geometry.location;
     return { lat: loc.lat, lng: loc.lng };
+  } catch (err: any) {
+    // Esto te deja un mensaje claro aunque sea error HTTP
+    const msg =
+      err?.error?.error_message ||
+      err?.error?.message ||
+      err?.message ||
+      'Error desconocido en Geocoding';
+    throw new Error(msg);
   }
+}
+
 }
